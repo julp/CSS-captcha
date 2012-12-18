@@ -1,0 +1,4 @@
+* play with CSS3 selector ? (first, last, nth)
+* placement, right to left, left to right (float) ?
+* insert fake empty (\s) element ?
+* insert random \s before and after ?
