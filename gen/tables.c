@@ -132,5 +132,10 @@ end:
             fclose(fps[i]);
         }
     }
+    {
+#include <unicode/uclean.h>
+        u_cleanup();
+    }
+
     return ret;
 }
