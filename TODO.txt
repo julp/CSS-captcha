@@ -2,3 +2,6 @@
 * placement, right to left, left to right (float) ?
 * insert fake empty (\s) element ?
 * insert random \s before and after ?
+* don't generate class from first character to last one: shuffle them ?
+* play with position and/or overflow ?
+* insert fake hidden element (display: none) ?

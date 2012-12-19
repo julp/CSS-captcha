@@ -21,3 +21,17 @@ foreach ($table as $a) {
 }
 $string .= ');';
 echo $string;
+
+echo str_repeat('=', 50);
+
+$table = array();
+$fp = fopen('ignorable.txt', 'r');
+while ($line = fgets($fp)) {
+    $table[] = rtrim($line);
+}
+fclose($fp);
+$string = 'array(' . "\n" . '    ';
+foreach ($table as $v) {
+    $string .= "'" . $v . "', ";
+}
+echo wordwrap($string, 60, "\n    ") . "\n" . ');';
