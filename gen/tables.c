@@ -78,7 +78,7 @@ int main(void)
         fprintf(stderr, "fopen failed\n");
         goto end;
     }
-    for (c = 0; c <= UCHAR_MAX_VALUE/*0xFFFF*/; c++) {
+    for (c = 0x80; c <= UCHAR_MAX_VALUE/*0xFFFF*/; c++) {
         cp_len = 0;
         U16_APPEND_UNSAFE(cp, cp_len, c);
         cp[cp_len] = 0;
