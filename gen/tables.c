@@ -99,9 +99,9 @@ int main(void)
                 continue;
             }
             if (2 == cp_len) {
-                fprintf(fps[letter], "\\%06X\n", c);
+                fprintf(fps[letter], "%06X\n", c);
             } else {
-                fprintf(fps[letter], "\\%04X\n", c);
+                fprintf(fps[letter], "%04X\n", c);
             }
         }
     }
@@ -115,7 +115,7 @@ int main(void)
 
         for (i = 0, s = uset_size(uset); i < s; i++) {
             c = uset_charAt(uset, i);
-            fprintf(fps[ARRAY_SIZE(fps) - 1], "%08X\n", c);
+            fprintf(fps[ARRAY_SIZE(fps) - 1], "%06X\n", c);
         }
     }
     ret = EXIT_SUCCESS;

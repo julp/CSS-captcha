@@ -12,11 +12,12 @@ foreach ($letters as $k => $l) {
 #var_export($table);
 $string = 'array(' . "\n";
 foreach ($table as $a) {
-    $string .= '    ' . 'array(';
+    $line = '';
+    $string .= '    array(' . "\n";
     foreach ($a as $v) {
-        $string .= "'" . addslashes($v) . "', ";
+        $line .= "'" . $v . "', ";
     }
-    $string .= '),' . "\n";
+    $string .= '        ' . wordwrap($line, 60, "\n        ") . "\n" . '    ),' . "\n";
 }
 $string .= ');';
 echo $string;
