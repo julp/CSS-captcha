@@ -367,32 +367,21 @@ class CSSCaptcha {
         );
     }
 
-    protected function __construct($key, $challenge = NULL)
+    public function __construct($key, $challenge = NULL)
     {
         $this->_key = $key;
         if (is_null($challenge)) {
-            $_SESSION[self::PREFIX . $this->_key] = $this->_challenge = $this->generateChallenge();
+            if (array_key_exists(self::PREFIX . $key, $_SESSION)) {
+                if (!is_string($_SESSION[self::PREFIX . $key]) || !$_SESSION[self::PREFIX . $key]) {
+                    throw new /*\*/Exception("Unexistant key or invalid challenge");
+                } else {
+                    $this->_challenge = $_SESSION[self::PREFIX . $this->_key];
+                }
+            } else {
+                $_SESSION[self::PREFIX . $this->_key] = $this->_challenge = $this->generateChallenge();
+            }
         } else {
             $this->_challenge = $challenge;
-        }
-    }
-
-    public static function create()
-    {
-        return new CssCaptcha/*static*/(
-            base_convert(sha1(uniqid(mt_rand(), TRUE)), 16, 36)
-        );
-    }
-
-    public static function createFromKey($key)
-    {
-        if (!array_key_exists(self::PREFIX . $key, $_SESSION) || !is_string($_SESSION[self::PREFIX . $key]) || !$_SESSION[self::PREFIX . $key]) {
-            throw new /*\*/Exception("Unexistant or invalid key");
-        } else {
-            return new CssCaptcha/*static*/(
-                $key,
-                $_SESSION[self::PREFIX . $key]
-            );
         }
     }
 
@@ -438,5 +427,10 @@ class CSSCaptcha {
     public function getKey()
     {
         return $this->_key;
+    }
+
+    public function getChallenge()
+    {
+        return str_replace(' ', '', $this->_challenge);
     }
 }

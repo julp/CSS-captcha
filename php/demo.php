@@ -11,24 +11,26 @@ ini_set('display_errors', FALSE); // hide array_rand warning
     </head>
     <body>
 <?php
+define('KEY', 'demo');
+
 if (isset($_POST['captcha'])) {
-    $captcha = CSSCaptcha::createFromKey($_POST['captcha_key']);
+    $captcha = new CSSCaptcha(KEY);
     if ($captcha->validate($_POST['captcha'])) {
+        $captcha->cleanup();
+        $captcha = new CSSCaptcha(KEY);
         echo '<p>You pass. New token created.</p>';
-        $captcha = CSSCaptcha::create();
     } else {
         echo '<p>You fail.</p>';
     }
-} else /*if (!isset($_SESSION['']))*/ { /* TODO: while you are in GET, you can generate as many "key" you want */
-    $_SESSION = array(); // just in case, for now, to assume we cannot blow up our session
-    $captcha = CSSCaptcha::create();
+} else /*if (!isset($_SESSION['']))*/ {
+    $captcha = new CSSCaptcha(KEY);
 }
 ?>
         <form method="post" action="">
             <?php echo $captcha->render(); ?>
             <div>
                 Captcha : <input type="text" name="captcha"/> (only lower cased letter and digit)
-                <input type="hidden" name="captcha_key" value="<?php echo $captcha->getKey(); ?>"/>
+                <!--<input type="hidden" name="captcha_key" value="<?php echo $captcha->getKey(); ?>"/>-->
             </div>
             <input type="submit" value="Envoyer"/>
         </form>
