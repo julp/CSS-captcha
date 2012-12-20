@@ -16,8 +16,7 @@ define('KEY', 'demo');
 if (isset($_POST['captcha'])) {
     $captcha = new CSSCaptcha(KEY);
     if ($captcha->validate($_POST['captcha'])) {
-        $captcha->cleanup();
-        $captcha = new CSSCaptcha(KEY);
+        $captcha->reset();
         echo '<p>You pass. New token created.</p>';
     } else {
         echo '<p>You fail.</p>';

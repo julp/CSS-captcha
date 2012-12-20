@@ -420,6 +420,11 @@ class CSSCaptcha {
         unset($_SESSION[self::PREFIX . $this->_key]);
     }
 
+    public function reset()
+    {
+        $_SESSION[self::PREFIX . $this->_key] = $this->_challenge = $this->generateChallenge();
+    }
+
     public function getKey()
     {
         return $this->_key;
