@@ -393,22 +393,18 @@ class CSSCaptcha {
             $ret .= '<style type="text/css">';
             for ($i = 0, $l = strlen($this->_challenge); $i < $l; $i++) {
                 if ($this->_challenge[$i] == ' ') {
-                    $ret .= '.captcha-' . $i . ' { display: none; }' . "\n";
+                    $ret .= '#captcha span:nth-child(' . ($i + 1) . ') { display: none; }' . "\n";
                     $p = rand(0, 35);
                 } else {
                     $p = intval($this->_challenge[$i], 36);
                 }
-                $ret .= '.captcha-' . $i . ':after { content: "' . self::generateIgnorables() . '\\' . self::$_tables[$p][array_rand(self::$_tables[$p])] . self::generateIgnorables() . '"; }' . "\n";
+                $ret .= '#captcha span:nth-child(' . ($i + 1) . '):after { content: "' . self::generateIgnorables() . '\\' . self::$_tables[$p][array_rand(self::$_tables[$p])] . self::generateIgnorables() . '"; }' . "\n";
             }
             $ret .= '</style>';
         }
 
         if ($what & self::HTML) {
-            $ret .= '<div id="captcha">';
-            for ($i = 0, $l = strlen($this->_challenge); $i < $l; $i++) {
-                $ret .= '<span class="captcha-' . $i . '"></span>';
-            }
-            $ret .= '</div>';
+            $ret .= '<div id="captcha">' . str_repeat('<span></span>', strlen($this->_challenge)) . '</div>';
         }
 
         return $ret;
