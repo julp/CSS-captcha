@@ -19,7 +19,8 @@ if (isset($_POST['captcha'])) {
     } else {
         echo '<p>You fail.</p>';
     }
-} else {
+} else /*if (!isset($_SESSION['']))*/ { /* TODO: while you are in GET, you can generate as many "key" you want */
+    $_SESSION = array(); // just in case, for now, to assume we cannot blow up our session
     $captcha = CSSCaptcha::create();
 }
 ?>
