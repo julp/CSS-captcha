@@ -6,8 +6,9 @@ class CSSCaptcha {
     const CSS  = 0x01;
     const HTML = 0x10;
 
-    const PREFIX = 'captcha_';
-    const LENGTH = 8;
+    const PREFIX = 'captcha_'; /* prefix for session variables */
+    const LENGTH = 8;          /* length of challenge string (fake characters excluded) */
+    const FAKE   = 2;          /* number of fake characters generated in HTML/CSS */
 
     protected static $_tables = array(
         array(
@@ -345,10 +346,11 @@ class CSSCaptcha {
     {
         $alphabet = '0123456789abcdefghijklmnopqrstuvwxyz';
 
-        $token = '';
+        $token = str_repeat(' ', self::FAKE);
         for ($i = 0; $i < self::LENGTH; $i++) {
             $token .= $alphabet[rand(0, 35)];
         }
+        $token = str_shuffle($token);
 
         return $token;
     }
@@ -401,7 +403,12 @@ class CSSCaptcha {
         if ($what & self::CSS) {
             $ret .= '<style type="text/css">';
             for ($i = 0, $l = strlen($this->_challenge); $i < $l; $i++) {
-                $p = intval($this->_challenge[$i], 36);
+                if ($this->_challenge[$i] == ' ') {
+                    $ret .= '.captcha-' . $i . ' { display: none; }' . "\n";
+                    $p = rand(0, 35);
+                } else {
+                    $p = intval($this->_challenge[$i], 36);
+                }
                 $ret .= '.captcha-' . $i . ':after { content: "' . self::generateIgnorables() . '\\' . self::$_tables[$p][array_rand(self::$_tables[$p])] . self::generateIgnorables() . '"; }' . "\n";
             }
             $ret .= '</style>';
@@ -420,7 +427,7 @@ class CSSCaptcha {
 
     public function validate($user_input)
     {
-        return $this->_challenge === $user_input;
+        return str_replace(' ', '', $this->_challenge) === $user_input;
     }
 
     public function cleanup()
