@@ -6,9 +6,13 @@ class CSSCaptcha {
     const CSS  = 0x01;
     const HTML = 0x10;
 
-    const PREFIX = 'captcha_'; /* prefix for session variables */
-    const LENGTH = 8;          /* length of challenge string (fake characters excluded) */
-    const FAKE   = 2;          /* number of fake characters generated in HTML/CSS */
+    const SESSION_PREFIX   = 'captcha_'; /* prefix for session variables */
+    const CHALLENGE_LENGTH = 8; /* length of challenge string (fake characters excluded) */
+    const FAKE_CHARACTERS  = 2; /* number of fake characters generated in HTML/CSS */
+
+    const WRAPPER_TAG_NAME = 'div';
+    const WRAPPER_TAG_ID   = 'captcha';
+    const INNER_TAGS_NAME  = 'span';
 
     protected static $_tables = array(
         array(
@@ -346,8 +350,8 @@ class CSSCaptcha {
     {
         $alphabet = '0123456789abcdefghijklmnopqrstuvwxyz';
 
-        $token = str_repeat(' ', self::FAKE);
-        for ($i = 0; $i < self::LENGTH; $i++) {
+        $token = str_repeat(' ', self::FAKE_CHARACTERS);
+        for ($i = 0; $i < self::CHALLENGE_LENGTH; $i++) {
             $token .= $alphabet[rand(0, 35)];
         }
         $token = str_shuffle($token);
@@ -371,14 +375,14 @@ class CSSCaptcha {
     {
         $this->_key = $key;
         if (is_null($challenge)) {
-            if (array_key_exists(self::PREFIX . $key, $_SESSION)) {
-                if (!is_string($_SESSION[self::PREFIX . $key]) || !$_SESSION[self::PREFIX . $key]) {
+            if (array_key_exists(self::SESSION_PREFIX . $key, $_SESSION)) {
+                if (!is_string($_SESSION[self::SESSION_PREFIX . $key]) || !$_SESSION[self::SESSION_PREFIX . $key]) {
                     throw new /*\*/Exception("Unexistant key or invalid challenge");
                 } else {
-                    $this->_challenge = $_SESSION[self::PREFIX . $this->_key];
+                    $this->_challenge = $_SESSION[self::SESSION_PREFIX . $this->_key];
                 }
             } else {
-                $_SESSION[self::PREFIX . $this->_key] = $this->_challenge = $this->generateChallenge();
+                $this->renew();
             }
         } else {
             $this->_challenge = $challenge;
@@ -412,17 +416,19 @@ class CSSCaptcha {
 
     public function validate($user_input)
     {
+        // ++attempts;
         return str_replace(' ', '', $this->_challenge) === $user_input;
     }
 
     public function cleanup()
     {
-        unset($_SESSION[self::PREFIX . $this->_key]);
+        unset($_SESSION[self::SESSION_PREFIX . $this->_key]);
     }
 
-    public function reset()
+    public function renew()
     {
-        $_SESSION[self::PREFIX . $this->_key] = $this->_challenge = $this->generateChallenge();
+        // attempts = 0;
+        $_SESSION[self::SESSION_PREFIX . $this->_key] = $this->_challenge = $this->generateChallenge();
     }
 
     public function getKey()

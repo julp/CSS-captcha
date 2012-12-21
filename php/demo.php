@@ -11,12 +11,12 @@ ini_set('display_errors', FALSE); // hide array_rand warning
     </head>
     <body>
 <?php
-define('KEY', 'demo');
+define('KEY', pathinfo(__FILE__, PATHINFO_FILENAME));
 
 if (isset($_POST['captcha'])) {
     $captcha = new CSSCaptcha(KEY);
     if ($captcha->validate($_POST['captcha'])) {
-        $captcha->reset();
+        $captcha->renew();
         echo '<p>You pass. New token created.</p>';
     } else {
         echo '<p>You fail.</p>';
@@ -29,8 +29,8 @@ if (isset($_POST['captcha'])) {
             <?php echo $captcha->render(); ?>
             <div>
                 Captcha : <input type="text" name="captcha"/> (only lower cased letter and digit)
-                <!--<input type="hidden" name="captcha_key" value="<?php echo $captcha->getKey(); ?>"/>-->
             </div>
+            <p>Expect: <?php var_dump($captcha->getChallenge()); ?></p>
             <input type="submit" value="Envoyer"/>
         </form>
     </body>
