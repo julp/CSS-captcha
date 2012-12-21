@@ -395,7 +395,11 @@ class CSSCaptcha {
 
         if ($what & self::CSS) {
             $ret .= '<style type="text/css">';
-            for ($i = 0, $l = strlen($this->_challenge); $i < $l; $i++) {
+            $index = array_keys(
+                array_fill(0, strlen($this->_challenge) - 1, NULL)
+            );
+            shuffle($index);
+            foreach ($index as $i) {
                 if ($this->_challenge[$i] == ' ') {
                     $ret .= '#captcha span:nth-child(' . ($i + 1) . ') { display: none; }' . "\n";
                     $p = rand(0, 35);
