@@ -6,13 +6,14 @@ class CSSCaptcha {
     const CSS  = 0x01;
     const HTML = 0x10;
 
-    const SESSION_PREFIX   = 'captcha_'; /* prefix for session variables */
-    const CHALLENGE_LENGTH = 8; /* length of challenge string (fake characters excluded) */
-    const FAKE_CHARACTERS  = 2; /* number of fake characters generated in HTML/CSS */
+    const SESSION_PREFIX   = 'captcha_'; // prefix for session variables
+    const CHALLENGE_LENGTH = 8;          // length of challenge string (fake characters excluded)
+    const FAKE_CHARACTERS  = 2;          // number of fake characters generated in HTML/CSS
+    const ONLY_LTR         = FALSE;      // set FALSE to allow random float: right;
 
-    const WRAPPER_TAG_NAME = 'div';
-    const WRAPPER_TAG_ID   = 'captcha';
-    const INNER_TAGS_NAME  = 'span';
+    const WRAPPER_TAG_NAME = 'div';     // TODO: unused
+    const WRAPPER_TAG_ID   = 'captcha'; // TODO: unused
+    const INNER_TAGS_NAME  = 'span';    // TODO: unused
 
     protected static $_tables = array(
         array(
@@ -393,18 +394,28 @@ class CSSCaptcha {
     {
         $ret = '';
 
+        $rtl = ($what == self::CSS | self::HTML) && !self::ONLY_LTR && rand(0, 1); # TODO: remove $what == self::CSS | self::HTML test, implies to move "$rtl" to a higher "scope" (session and/or attribute)
+
         if ($what & self::CSS) {
             $ret .= '<style type="text/css">';
+            if ($rtl) {
+                $ret .= '#captcha { float: left; /*position: absolute; left: 0;*/ height: auto; overflow: hidden; zoom: 1; }' . "\n";
+                $ret .= '#captcha span { float: right; }' . "\n";
+                $ret .= '#captcha:after { content: "."; visibility: hidden; display: block; height: 0; clear: both; }' . "\n";
+                $challenge = strrev($this->_challenge);
+            } else {
+                $challenge = $this->_challenge;
+            }
             $index = array_keys(
-                array_fill(0, strlen($this->_challenge) - 1, NULL)
+                array_fill(0, strlen($this->_challenge), NULL)
             );
             shuffle($index);
             foreach ($index as $i) {
-                if ($this->_challenge[$i] == ' ') {
+                if ($challenge[$i] == ' ') {
                     $ret .= '#captcha span:nth-child(' . ($i + 1) . ') { display: none; }' . "\n";
                     $p = rand(0, 35);
                 } else {
-                    $p = intval($this->_challenge[$i], 36);
+                    $p = intval($challenge[$i], 36);
                 }
                 $ret .= '#captcha span:nth-child(' . ($i + 1) . '):after { content: "' . self::generateIgnorables() . '\\' . self::$_tables[$p][array_rand(self::$_tables[$p])] . self::generateIgnorables() . '"; }' . "\n";
             }

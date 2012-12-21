@@ -27,7 +27,7 @@ if (isset($_POST['captcha'])) {
 ?>
         <form method="post" action="">
             <?php echo $captcha->render(); ?>
-            <div>
+            <div style="clear: both;">
                 Captcha : <input type="text" name="captcha"/> (only lower cased letter and digit)
             </div>
             <p>Expect: <?php var_dump($captcha->getChallenge()); ?></p>
