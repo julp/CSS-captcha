@@ -406,9 +406,7 @@ class CSSCaptcha {
             } else {
                 $challenge = $this->_challenge;
             }
-            $index = array_keys(
-                array_fill(0, strlen($this->_challenge), NULL)
-            );
+            $index = range(0, strlen($this->_challenge) - 1);
             shuffle($index);
             foreach ($index as $i) {
                 if ($challenge[$i] == ' ') {
