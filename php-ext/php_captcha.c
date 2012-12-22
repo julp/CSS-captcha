@@ -179,23 +179,21 @@ static void captcha_fetch_or_create_challenge(Captcha_object* co, zval ***v TSRM
 
 //     if (SUCCESS == php_get_session_var(name, name_len, &vpp TSRMLS_CC) && IS_STRING == Z_TYPE_PP(vpp)) {
     if (SUCCESS == zend_symtable_find(Z_ARRVAL_P(PS(http_session_vars)), name, name_len + 1, (void **) &vpp) && IS_STRING == Z_TYPE_PP(vpp)) {
-        co->challenge = Z_STRVAL_PP(vpp);
-        co->challenge_len = Z_STRLEN_PP(vpp);
+        co->challenge = *vpp;
     } else {
+        long challenge_len;
+        const char *challenge;
         /* TODO: macro */
-        co->challenge = random_string(CAPTCHA_G(challenge_length) TSRMLS_CC);
-        co->challenge_len = CAPTCHA_G(challenge_length);
+        challenge_len = CAPTCHA_G(challenge_length);
+        challenge = random_string(challenge_len TSRMLS_CC);
         /* </TODO> */
 //         ZVAL_STRINGL(&v, co->challenge, co->challenge_len, 0);
 //         php_set_session_var(name, name_len, &v, NULL TSRMLS_CC);
 //         php_add_session_var(name, name_len TSRMLS_CC);
-            ALLOC_INIT_ZVAL(*vpp);
-            ZVAL_STRINGL(*vpp, co->challenge, co->challenge_len, 0);
-            ZEND_SET_SYMBOL_WITH_LENGTH(Z_ARRVAL_P(PS(http_session_vars)), name, name_len + 1, *vpp, 1, 0);
+            ALLOC_INIT_ZVAL(co->challenge);
+            ZVAL_STRINGL(co->challenge, challenge, challenge_len, 0);
+            ZEND_SET_SYMBOL_WITH_LENGTH(Z_ARRVAL_P(PS(http_session_vars)), name, name_len + 1, co->challenge, 1, 0);
 //         zend_throw_exception_ex(NULL, 0 TSRMLS_CC, "");
-    }
-    if (NULL != v) {
-        *v = vpp;
     }
     efree(name);
 }
@@ -278,15 +276,15 @@ PHP_FUNCTION(captcha_render)
         char index[MAX_CHALLENGE_LENGTH];
 
         smart_str_append_static(&ret, "<style type=\"text/css\">\n");
-        memcpy(index, shuffling, co->challenge_len);
-        php_string_shuffle(index, co->challenge_len TSRMLS_CC);
-        for (i = 0; i < co->challenge_len; i++) {
+        memcpy(index, shuffling, Z_STRLEN_P(co->challenge));
+        php_string_shuffle(index, Z_STRLEN_P(co->challenge) TSRMLS_CC);
+        for (i = 0; i < Z_STRLEN_P(co->challenge); i++) {
             const char *e;
 
             smart_str_append_static(&ret, "#captcha span:nth-child(");
             smart_str_append_long(&ret, index[i] + 1);
             smart_str_append_static(&ret, "):after { content: \"\\");
-            p = char2int(co->challenge[index[i]]);
+            p = char2int(Z_STRVAL_P(co->challenge)[index[i]]);
             e = table[p].tbl[captcha_rand(table[p].length - 1 TSRMLS_CC)];
             smart_str_appends(&ret, e);
             smart_str_append_static(&ret, "\"; }\n");
@@ -296,7 +294,7 @@ PHP_FUNCTION(captcha_render)
 
     if (what & CAPTCHA_HTML) {
         smart_str_append_static(&ret, "<div id=\"captcha\">");
-        smart_str_append_static_repeated(&ret, co->challenge_len, "<span></span>");
+        smart_str_append_static_repeated(&ret, Z_STRLEN_P(co->challenge), "<span></span>");
         smart_str_append_static(&ret, "</div>");
     }
 
@@ -314,6 +312,8 @@ PHP_FUNCTION(captcha_renew)
     Captcha_object* co;
     char *input = NULL;
     long input_len = 0;
+    long challenge_len;
+    const char *challenge;
 
     if (FAILURE == zend_parse_method_parameters(ZEND_NUM_ARGS() TSRMLS_CC, getThis(), "O", &object, Captcha_ce_ptr)) {
         RETURN_FALSE;
@@ -323,12 +323,12 @@ PHP_FUNCTION(captcha_renew)
         RETURN_FALSE;
     }
     captcha_fetch_or_create_challenge(co, &vpp TSRMLS_CC);
-    efree(co->challenge);
     /* TODO: macro */
-    co->challenge = random_string(CAPTCHA_G(challenge_length) TSRMLS_CC);
-    co->challenge_len = CAPTCHA_G(challenge_length);
+    challenge_len = CAPTCHA_G(challenge_length);
+    challenge = random_string(challenge_len TSRMLS_CC);
     /* </TODO> */
-    ZVAL_STRINGL(*vpp, co->challenge, co->challenge_len, 0);
+    zval_dtor(co->challenge);
+    ZVAL_STRINGL(co->challenge, challenge, challenge_len, 0);
 }
 
 PHP_FUNCTION(captcha_validate)
@@ -345,7 +345,7 @@ PHP_FUNCTION(captcha_validate)
     if (NULL == co) {
         RETURN_FALSE;
     }
-    if (input_len == co->challenge_len && 0 == memcmp(input, co->challenge, co->challenge_len)) {
+    if (input_len == Z_STRLEN_P(co->challenge) && 0 == memcmp(input, Z_STRVAL_P(co->challenge), Z_STRLEN_P(co->challenge))) {
         RETURN_TRUE;
     } else {
         RETURN_FALSE;
@@ -408,7 +408,7 @@ PHP_FUNCTION(captcha_get_challenge)
         RETURN_FALSE;
     }
 
-    RETURN_STRINGL(co->challenge, co->challenge_len, 1);
+    MAKE_COPY_ZVAL(&co->challenge, return_value);
 }
 
 static PHP_METHOD(Captcha, __wakeup)

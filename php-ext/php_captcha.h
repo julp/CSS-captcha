@@ -10,8 +10,7 @@ typedef struct {
 
     char *key;
     long key_len;
-    char *challenge;
-    long challenge_len;
+    zval *challenge;
 } Captcha_object;
 
 extern zend_class_entry *Captcha_ce_ptr;
