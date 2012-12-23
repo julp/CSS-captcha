@@ -14,6 +14,10 @@ use Julp\CSSCaptcha;
 <?php
 define('KEY', pathinfo(__FILE__, PATHINFO_FILENAME));
 
+// $colors = array('red', 'green', 'blue');
+CSSCaptcha::$fake_character_style = 'color: red;';
+// CSSCaptcha::$normal_character_style = 'color: blue;';
+
 if (isset($_POST['captcha'])) {
     $captcha = new CSSCaptcha(KEY);
     if ($captcha->validate($_POST['captcha'])) {

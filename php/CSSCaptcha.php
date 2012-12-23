@@ -418,7 +418,7 @@ class CSSCaptcha {
                 } else {
                     $p = intval($challenge[$i], 36);
                 }
-                $ret .= '#captcha span:nth-child(' . ($i + 1) . '):after { content: "' . self::generateIgnorables() . '\\' . self::$_tables[$p][array_rand(self::$_tables[$p])] . self::generateIgnorables() . '"; }' . "\n";
+                $ret .= '#captcha span:nth-child(' . ($i + 1) . '):after { content: "' . self::generateIgnorables() . '\\' . self::$_tables[$p][array_rand(self::$_tables[$p])] . self::generateIgnorables() . '"; ' /*. self::$normal_character_style*/ . ' }' . "\n";
             }
             $ret .= '</style>';
         }
