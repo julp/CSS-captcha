@@ -1,5 +1,5 @@
 <?php
-// namespace Julp;
+namespace Julp;
 
 class CSSCaptcha {
 
@@ -8,8 +8,11 @@ class CSSCaptcha {
 
     const SESSION_PREFIX   = 'captcha_'; // prefix for session variables
     const CHALLENGE_LENGTH = 8;          // length of challenge string (fake characters excluded)
-    const FAKE_CHARACTERS  = 2;          // number of fake characters generated in HTML/CSS
+    const FAKE_CHARACTERS_COUNT = 2;     // number of fake characters generated in HTML/CSS
     const ONLY_LTR         = FALSE;      // set FALSE to allow random float: right;
+
+    public static $fake_character_style   = 'display: none;';
+    public static $normal_character_style = '';
 
     const WRAPPER_TAG_NAME = 'div';     // TODO: unused
     const WRAPPER_TAG_ID   = 'captcha'; // TODO: unused
@@ -351,7 +354,7 @@ class CSSCaptcha {
     {
         $alphabet = '0123456789abcdefghijklmnopqrstuvwxyz';
 
-        $token = str_repeat(' ', self::FAKE_CHARACTERS);
+        $token = str_repeat(' ', self::FAKE_CHARACTERS_COUNT);
         for ($i = 0; $i < self::CHALLENGE_LENGTH; $i++) {
             $token .= $alphabet[rand(0, 35)];
         }
@@ -410,7 +413,7 @@ class CSSCaptcha {
             shuffle($index);
             foreach ($index as $i) {
                 if ($challenge[$i] == ' ') {
-                    $ret .= '#captcha span:nth-child(' . ($i + 1) . ') { display: none; }' . "\n";
+                    $ret .= '#captcha span:nth-child(' . ($i + 1) . ') { ' . self::$fake_character_style . ' }' . "\n";
                     $p = rand(0, 35);
                 } else {
                     $p = intval($challenge[$i], 36);
