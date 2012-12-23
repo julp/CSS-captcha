@@ -113,6 +113,20 @@ static const char shuffling[] = {
 
 #define MAX_CHALLENGE_LENGTH (ARRAY_SIZE(shuffling))
 
+#define GENERATE_CHALLENGE(/*char **/ challenge, /*long*/ challenge_len) \
+    do {                                                                 \
+        challenge_len = CAPTCHA_G(challenge_length);                     \
+        challenge = random_string(challenge_len TSRMLS_CC);              \
+    } while (0);
+
+#define COMPLETE_SESSION_KEY(/*Captcha_object **/ co, /*char **/ name, /*long*/ name_len) \
+    do {                                                                                  \
+        name_len = strlen(CAPTCHA_G(session_prefix)) + co->key_len;                       \
+        name = emalloc(name_len + 1);                                                     \
+        strcpy(name, CAPTCHA_G(session_prefix));                                          \
+        strcat(name, co->key);                                                            \
+    } while (0);
+
 ZEND_DECLARE_MODULE_GLOBALS(captcha)
 
 static void php_string_shuffle(char *str, long len TSRMLS_DC)
@@ -164,29 +178,21 @@ static char *random_string(long length TSRMLS_DC)
     return k;
 }
 
-static void captcha_fetch_or_create_challenge(Captcha_object* co, zval ***v TSRMLS_DC)
+static void captcha_fetch_or_create_challenge(Captcha_object* co TSRMLS_DC)
 {
     char *name;
     size_t name_len;
     zval **vpp;
 
-    /* TODO: macro */
-    name_len = strlen(CAPTCHA_G(session_prefix)) + co->key_len;
-    name = emalloc(name_len + 1);
-    strcpy(name, CAPTCHA_G(session_prefix));
-    strcat(name, co->key);
-    /* </TODO> */
-
+    COMPLETE_SESSION_KEY(co, name, name_len);
 //     if (SUCCESS == php_get_session_var(name, name_len, &vpp TSRMLS_CC) && IS_STRING == Z_TYPE_PP(vpp)) {
     if (SUCCESS == zend_symtable_find(Z_ARRVAL_P(PS(http_session_vars)), name, name_len + 1, (void **) &vpp) && IS_STRING == Z_TYPE_PP(vpp)) {
         co->challenge = *vpp;
     } else {
         long challenge_len;
         const char *challenge;
-        /* TODO: macro */
-        challenge_len = CAPTCHA_G(challenge_length);
-        challenge = random_string(challenge_len TSRMLS_CC);
-        /* </TODO> */
+
+        GENERATE_CHALLENGE(challenge, challenge_len);
 //         ZVAL_STRINGL(&v, co->challenge, co->challenge_len, 0);
 //         php_set_session_var(name, name_len, &v, NULL TSRMLS_CC);
 //         php_add_session_var(name, name_len TSRMLS_CC);
@@ -206,7 +212,6 @@ static void captcha_ctor(INTERNAL_FUNCTION_PARAMETERS)
     long key_len = 0;
     char *name;
     size_t name_len;
-    zval v, *vp, **vpp;
 
     object = return_value;
     if (FAILURE == zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s", &key, &key_len)) {
@@ -222,7 +227,7 @@ static void captcha_ctor(INTERNAL_FUNCTION_PARAMETERS)
         co->key = estrdup(key);
         co->key_len = key_len;
     }
-    captcha_fetch_or_create_challenge(co, NULL TSRMLS_CC);
+    captcha_fetch_or_create_challenge(co TSRMLS_CC);
 }
 
 PHP_FUNCTION(captcha_create)
@@ -308,7 +313,7 @@ PHP_FUNCTION(captcha_render)
 
 PHP_FUNCTION(captcha_renew)
 {
-    zval *object, **vpp;
+    zval *object;
     Captcha_object* co;
     char *input = NULL;
     long input_len = 0;
@@ -322,11 +327,8 @@ PHP_FUNCTION(captcha_renew)
     if (NULL == co) {
         RETURN_FALSE;
     }
-    captcha_fetch_or_create_challenge(co, &vpp TSRMLS_CC);
-    /* TODO: macro */
-    challenge_len = CAPTCHA_G(challenge_length);
-    challenge = random_string(challenge_len TSRMLS_CC);
-    /* </TODO> */
+    captcha_fetch_or_create_challenge(co TSRMLS_CC);
+    GENERATE_CHALLENGE(challenge, challenge_len);
     zval_dtor(co->challenge);
     ZVAL_STRINGL(co->challenge, challenge, challenge_len, 0);
 }
@@ -382,12 +384,7 @@ PHP_FUNCTION(captcha_cleanup)
     if (NULL == co) {
         RETURN_FALSE;
     }
-    /* TODO: macro */
-    name_len = strlen(CAPTCHA_G(session_prefix)) + co->key_len;
-    name = emalloc(name_len + 1);
-    strcpy(name, CAPTCHA_G(session_prefix));
-    strcat(name, co->key);
-    /* </TODO> */
+    COMPLETE_SESSION_KEY(co, name, name_len);
     if (SUCCESS == zend_hash_del(Z_ARRVAL_P(PS(http_session_vars)), name, name_len + 1)) {
         RETURN_TRUE;
     } else {
