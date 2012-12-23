@@ -113,6 +113,15 @@ static const char shuffling[] = {
 
 #define MAX_CHALLENGE_LENGTH (ARRAY_SIZE(shuffling))
 
+#define CAPTCHA_FETCH_OBJ(/*Captcha_object **/ co, /*zval **/ object)                                              \
+    do {                                                                                                           \
+        co = (Captcha_object *) zend_object_store_get_object(object TSRMLS_CC);                                    \
+        if (NULL == co->key) {                                                                                     \
+            php_error_docref(NULL TSRMLS_CC, E_WARNING, "Invalid or unitialized %s object", Captcha_ce_ptr->name); \
+            RETURN_FALSE;                                                                                          \
+        }                                                                                                          \
+    } while (0);
+
 #define GENERATE_CHALLENGE(/*char **/ challenge, /*long*/ challenge_len) \
     do {                                                                 \
         challenge_len = CAPTCHA_G(challenge_length);                     \
@@ -184,24 +193,23 @@ static void captcha_fetch_or_create_challenge(Captcha_object* co TSRMLS_DC)
     size_t name_len;
     zval **vpp;
 
-    COMPLETE_SESSION_KEY(co, name, name_len);
-//     if (SUCCESS == php_get_session_var(name, name_len, &vpp TSRMLS_CC) && IS_STRING == Z_TYPE_PP(vpp)) {
-    if (SUCCESS == zend_symtable_find(Z_ARRVAL_P(PS(http_session_vars)), name, name_len + 1, (void **) &vpp) && IS_STRING == Z_TYPE_PP(vpp)) {
-        co->challenge = *vpp;
-    } else {
-        long challenge_len;
-        const char *challenge;
+    if (PS(http_session_vars) && IS_ARRAY == PS(http_session_vars)->type) {
+        COMPLETE_SESSION_KEY(co, name, name_len);
+        if (SUCCESS == zend_symtable_find(Z_ARRVAL_P(PS(http_session_vars)), name, name_len + 1, (void **) &vpp) && IS_STRING == Z_TYPE_PP(vpp)) {
+            co->challenge = *vpp;
+        } else {
+            long challenge_len;
+            const char *challenge;
 
-        GENERATE_CHALLENGE(challenge, challenge_len);
-//         ZVAL_STRINGL(&v, co->challenge, co->challenge_len, 0);
-//         php_set_session_var(name, name_len, &v, NULL TSRMLS_CC);
-//         php_add_session_var(name, name_len TSRMLS_CC);
+            GENERATE_CHALLENGE(challenge, challenge_len);
             ALLOC_INIT_ZVAL(co->challenge);
             ZVAL_STRINGL(co->challenge, challenge, challenge_len, 0);
             ZEND_SET_SYMBOL_WITH_LENGTH(Z_ARRVAL_P(PS(http_session_vars)), name, name_len + 1, co->challenge, 1, 0);
-//         zend_throw_exception_ex(NULL, 0 TSRMLS_CC, "");
+        }
+        efree(name);
+    } else {
+        zend_throw_exception_ex(NULL, 0 TSRMLS_CC, "CSSCaptcha implies an active session");
     }
-    efree(name);
 }
 
 static void captcha_ctor(INTERNAL_FUNCTION_PARAMETERS)
@@ -271,10 +279,7 @@ PHP_FUNCTION(captcha_render)
     if (FAILURE == zend_parse_method_parameters(ZEND_NUM_ARGS() TSRMLS_CC, getThis(), "O", &object, Captcha_ce_ptr, &what)) {
         RETURN_FALSE;
     }
-    co = (Captcha_object *) zend_object_store_get_object(object TSRMLS_CC);
-    if (NULL == co) {
-        RETURN_FALSE;
-    }
+    CAPTCHA_FETCH_OBJ(co, object);
 
     if (what & CAPTCHA_CSS) {
         long i, p;
@@ -323,10 +328,7 @@ PHP_FUNCTION(captcha_renew)
     if (FAILURE == zend_parse_method_parameters(ZEND_NUM_ARGS() TSRMLS_CC, getThis(), "O", &object, Captcha_ce_ptr)) {
         RETURN_FALSE;
     }
-    co = (Captcha_object *) zend_object_store_get_object(object TSRMLS_CC);
-    if (NULL == co) {
-        RETURN_FALSE;
-    }
+    CAPTCHA_FETCH_OBJ(co, object);
     captcha_fetch_or_create_challenge(co TSRMLS_CC);
     GENERATE_CHALLENGE(challenge, challenge_len);
     zval_dtor(co->challenge);
@@ -343,10 +345,7 @@ PHP_FUNCTION(captcha_validate)
     if (FAILURE == zend_parse_method_parameters(ZEND_NUM_ARGS() TSRMLS_CC, getThis(), "Os", &object, Captcha_ce_ptr, &input, &input_len)) {
         RETURN_FALSE;
     }
-    co = (Captcha_object *) zend_object_store_get_object(object TSRMLS_CC);
-    if (NULL == co) {
-        RETURN_FALSE;
-    }
+    CAPTCHA_FETCH_OBJ(co, object);
     if (input_len == Z_STRLEN_P(co->challenge) && 0 == memcmp(input, Z_STRVAL_P(co->challenge), Z_STRLEN_P(co->challenge))) {
         RETURN_TRUE;
     } else {
@@ -362,10 +361,7 @@ PHP_FUNCTION(captcha_get_key)
     if (FAILURE == zend_parse_method_parameters(ZEND_NUM_ARGS() TSRMLS_CC, getThis(), "O", &object, Captcha_ce_ptr)) {
         RETURN_FALSE;
     }
-    co = (Captcha_object *) zend_object_store_get_object(object TSRMLS_CC);
-    if (NULL == co) {
-        RETURN_FALSE;
-    }
+    CAPTCHA_FETCH_OBJ(co, object);
 
     RETURN_STRINGL(co->key, co->key_len, 1);
 }
@@ -380,10 +376,7 @@ PHP_FUNCTION(captcha_cleanup)
     if (FAILURE == zend_parse_method_parameters(ZEND_NUM_ARGS() TSRMLS_CC, getThis(), "O", &object, Captcha_ce_ptr)) {
         RETURN_FALSE;
     }
-    co = (Captcha_object *) zend_object_store_get_object(object TSRMLS_CC);
-    if (NULL == co) {
-        RETURN_FALSE;
-    }
+    CAPTCHA_FETCH_OBJ(co, object);
     COMPLETE_SESSION_KEY(co, name, name_len);
     if (SUCCESS == zend_hash_del(Z_ARRVAL_P(PS(http_session_vars)), name, name_len + 1)) {
         RETURN_TRUE;
@@ -400,10 +393,7 @@ PHP_FUNCTION(captcha_get_challenge)
     if (FAILURE == zend_parse_method_parameters(ZEND_NUM_ARGS() TSRMLS_CC, getThis(), "O", &object, Captcha_ce_ptr)) {
         RETURN_FALSE;
     }
-    co = (Captcha_object *) zend_object_store_get_object(object TSRMLS_CC);
-    if (NULL == co) {
-        RETURN_FALSE;
-    }
+    CAPTCHA_FETCH_OBJ(co, object);
 
     MAKE_COPY_ZVAL(&co->challenge, return_value);
 }
