@@ -2,7 +2,9 @@
 #include <stdio.h>
 #include <getopt.h>
 #include <errno.h>
+#include <limits.h>
 
+#include <unicode/ucnv.h>
 #include <unicode/uset.h>
 #include <unicode/ubrk.h>
 #include <unicode/unorm2.h>
@@ -29,10 +31,18 @@ extern char *__progname;
 
 #ifndef EUSAGE
 # define EUSAGE -2
-#endif /* EUSAGE */
+#endif /* !EUSAGE */
 
-static UChar ignorable[] = { 0x005B, 0x005C, 0x0074, 0x005C, 0x006E, 0x005C, 0x0066, 0x005C, 0x0072, 0x005C, 0x0070, 0x007B, 0x005A, 0x007D, 0x005D, 0 }; /* [\t\n\f\r\p{Z}] */
+#ifndef UINT8_MAX
+# if defined(UCHAR_MAX)
+#  define UINT8_MAX UCHAR_MAX
+# elif defined(CHAR_MAX)
+#  define UINT8_MAX CHAR_MAX
+# endif
+#endif /* !UINT8_MAX */
+
 static char alphabet[] = "0123456789abcdefghijklmnopqrstuvwxyz";
+static UChar default_ignorables[] = { 0x005B, 0x005C, 0x0074, 0x005C, 0x006E, 0x005C, 0x0066, 0x005C, 0x0072, 0x005C, 0x0070, 0x007B, 0x005A, 0x007D, 0x005D, 0 }; /* [\t\n\f\r\p{Z}] */
 
 static char optstr[] = "i:v:";
 
@@ -62,7 +72,7 @@ int version_check(const char *s)
     part = 0;
     while (1) {
         v = strtoul(s, &end, 10);
-        if (v > 9 || end == s || ++part >= U_MAX_VERSION_LENGTH) {
+        if (v > UINT8_MAX || end == s || ++part >= U_MAX_VERSION_LENGTH) {
             return 0;
         }
         if ('\0' == *end) {
@@ -97,24 +107,24 @@ int main(int argc, char **argv)
     size_t i;
     UChar32 c;
     USet *uset;
-    UChar *ignorablep;
     UErrorCode status;
     UBreakIterator *ubrk;
+    UChar *user_ignorables;
     int32_t cp_len, res_len;
     char path[1024] = "X.txt";
     const UNormalizer2 *unorm;
     int o, ret, letter, vflag;
     UVersionInfo wanted_version;
-    FILE *fps[STR_LEN(alphabet) + 1] = { 0 }; /* + 1 for ignorable.txt */
+    FILE *fps[STR_LEN(alphabet) + 1] = { 0 }; /* + 1 for ignorables.txt */
     UChar cp[U16_MAX_LENGTH + 1], res[STR_LEN(cp) * MAX_UTF16_NFKD_EXPANSION_FACTOR + 1];
 
     vflag = 0;
     ubrk = NULL;
     uset = NULL;
     unorm = NULL;
-    ignorablep = NULL;
     ret = EXIT_FAILURE;
     status = U_ZERO_ERROR;
+    user_ignorables = default_ignorables;
 
 #ifdef BSD
     {
@@ -150,8 +160,36 @@ int main(int argc, char **argv)
     while (-1 != (o = getopt_long(argc, argv, optstr, long_options, NULL))) {
         switch (o) {
             case 'i':
-                // not yet implemented
+            {
+                UConverter *ucnv;
+                int32_t user_ignorables_size, user_ignorables_length;
+
+                ucnv = ucnv_open(NULL, &status);
+                if (U_FAILURE(status)) {
+                    fprintf(stderr, "ucnv_open failed with %s\n", u_errorName(status));
+                    return EXIT_FAILURE;
+                }
+                user_ignorables_size = ucnv_toUChars(ucnv, NULL, 0, optarg, -1, &status) + 1;
+                if (status != U_BUFFER_OVERFLOW_ERROR) {
+                    fprintf(stderr, "unexpected return value from ICU (%s)\n", u_errorName(status));
+                    ucnv_close(ucnv);
+                    return EXIT_FAILURE;
+                }
+                status = U_ZERO_ERROR;
+                if (NULL == (user_ignorables = malloc(*user_ignorables * user_ignorables_size))) {
+                    fprintf(stderr, "memory allocation failed\n");
+                    ucnv_close(ucnv);
+                    return EXIT_FAILURE;
+                }
+                user_ignorables_length = ucnv_toUChars(ucnv, user_ignorables, user_ignorables_size, optarg, -1, &status);
+                if (U_FAILURE(status)) {
+                    fprintf(stderr, "conversion into UTF-16 failed (ucnv_toUChars) with %s\n", u_errorName(status));
+                    ucnv_close(ucnv);
+                    return EXIT_FAILURE;
+                }
+                ucnv_close(ucnv);
                 break;
+            }
             case 'v':
             {
                 UVersionInfo current_unicode_version;
@@ -176,6 +214,11 @@ int main(int argc, char **argv)
     argc -= optind;
     argv += optind;
 
+    uset = uset_openPattern(user_ignorables, -1, &status);
+    if (U_FAILURE(status)) {
+        fprintf(stderr, "uset_openPattern failed with %s\n", u_errorName(status));
+        goto end;
+    }
 //     unorm = unorm2_getNFDInstance(&status);
     unorm = unorm2_getNFKDInstance(&status);
     if (U_FAILURE(status)) {
@@ -194,11 +237,11 @@ int main(int argc, char **argv)
             goto end;
         }
     }
-    if (NULL == (fps[i] = fopen("ignorable.txt", "w"))) {
+    if (NULL == (fps[i] = fopen("ignorables.txt", "w"))) {
         fprintf(stderr, "fopen failed\n");
         goto end;
     }
-    for (c = 0x80; c <= UCHAR_MAX_VALUE/*0xFFFF*/; c++) {
+    for (c = 0x80; c <= UCHAR_MAX_VALUE; c++) {
         cp_len = 0;
         U16_APPEND_UNSAFE(cp, cp_len, c);
         cp[cp_len] = 0;
@@ -233,11 +276,6 @@ int main(int argc, char **argv)
             }
         }
     }
-    uset = uset_openPattern(ignorable, -1, &status);
-    if (U_FAILURE(status)) {
-        fprintf(stderr, "uset_openPattern failed with %s\n", u_errorName(status));
-        goto end;
-    }
     {
         int32_t i, s;
 
@@ -249,6 +287,9 @@ int main(int argc, char **argv)
     ret = EXIT_SUCCESS;
 
 end:
+    if (user_ignorables != default_ignorables) {
+        free(user_ignorables);
+    }
     if (NULL != ubrk) {
         ubrk_close(ubrk);
     }
