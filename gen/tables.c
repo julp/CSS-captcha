@@ -1,5 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <getopt.h>
+#include <errno.h>
 
 #include <unicode/uset.h>
 #include <unicode/ubrk.h>
@@ -19,8 +21,61 @@
 #define MAX_UTF16_NFD_EXPANSION_FACTOR  4
 #define MAX_UTF16_NFKD_EXPANSION_FACTOR 18
 
+#ifdef _MSC_VER
+extern char __progname[];
+#else
+extern char *__progname;
+# endif /* _MSC_VER */
+
+#ifndef EUSAGE
+# define EUSAGE -2
+#endif /* EUSAGE */
+
 static UChar ignorable[] = { 0x005B, 0x005C, 0x0074, 0x005C, 0x006E, 0x005C, 0x0066, 0x005C, 0x0072, 0x005C, 0x0070, 0x007B, 0x005A, 0x007D, 0x005D, 0 }; /* [\t\n\f\r\p{Z}] */
 static char alphabet[] = "0123456789abcdefghijklmnopqrstuvwxyz";
+
+static char optstr[] = "i:v:";
+
+static struct option long_options[] = {
+    { "ignorables", required_argument, NULL, 'i' },
+    { "version",    required_argument, NULL, 'v' },
+    { NULL,         no_argument,       NULL, 0   }
+};
+
+static void usage(void)
+{
+    fprintf(
+        stderr,
+        "usage: %s [-%s]\n",
+        __progname,
+        optstr
+    );
+    exit(EUSAGE);
+}
+
+int version_check(const char *s)
+{
+    int part;
+    char *end;
+    unsigned long v;
+
+    part = 0;
+    while (1) {
+        v = strtoul(s, &end, 10);
+        if (v > 9 || end == s || ++part >= U_MAX_VERSION_LENGTH) {
+            return 0;
+        }
+        if ('\0' == *end) {
+            break;
+        }
+        if (U_VERSION_DELIMITER != *end) {
+            return 0;
+        }
+        s = end + 1;
+    }
+
+    return part > 0 && part <= U_MAX_VERSION_LENGTH;
+}
 
 int accept_as(UChar c)
 {
@@ -37,25 +92,90 @@ int accept_as(UChar c)
     return -1;
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
     size_t i;
     UChar32 c;
     USet *uset;
-    int ret, letter;
+    UChar *ignorablep;
     UErrorCode status;
     UBreakIterator *ubrk;
     int32_t cp_len, res_len;
     char path[1024] = "X.txt";
     const UNormalizer2 *unorm;
-    FILE *fps[STR_LEN(alphabet) + 1] = { 0 }; /* + 1 pour ignorable.txt */
+    int o, ret, letter, vflag;
+    UVersionInfo wanted_version;
+    FILE *fps[STR_LEN(alphabet) + 1] = { 0 }; /* + 1 for ignorable.txt */
     UChar cp[U16_MAX_LENGTH + 1], res[STR_LEN(cp) * MAX_UTF16_NFKD_EXPANSION_FACTOR + 1];
 
+    vflag = 0;
     ubrk = NULL;
     uset = NULL;
     unorm = NULL;
+    ignorablep = NULL;
     ret = EXIT_FAILURE;
     status = U_ZERO_ERROR;
+
+#ifdef BSD
+    {
+# include <sys/types.h>
+# include <pwd.h>
+# include <login_cap.h>
+
+        login_cap_t *lc;
+        const char *tmp;
+        struct passwd *pwd;
+
+        if (NULL != (pwd = getpwuid(getuid()))) {
+            if (NULL != (lc = login_getuserclass(pwd))) {
+                if (NULL != (tmp = login_getcapstr(lc, "charset", NULL, NULL))) {
+                    ucnv_setDefaultName(tmp);
+                }
+                login_close(lc);
+            } else {
+                if (NULL != (lc = login_getpwclass(pwd))) {
+                    if (NULL != (tmp = login_getcapstr(lc, "charset", NULL, NULL))) {
+                        ucnv_setDefaultName(tmp);
+                    }
+                    login_close(lc);
+                }
+            }
+        }
+        if (NULL != (tmp = getenv("MM_CHARSET"))) {
+            ucnv_setDefaultName(tmp);
+        }
+    }
+#endif /* BSD */
+
+    while (-1 != (o = getopt_long(argc, argv, optstr, long_options, NULL))) {
+        switch (o) {
+            case 'i':
+                // not yet implemented
+                break;
+            case 'v':
+            {
+                UVersionInfo current_unicode_version;
+
+                vflag = 1;
+                u_getUnicodeVersion(current_unicode_version);
+                if (!version_check(optarg)) {
+                    fprintf(stderr, "Invalid version '%s'\n", optarg);
+                    return EXIT_FAILURE;
+                }
+                u_versionFromString(wanted_version, optarg);
+                if (memcmp(wanted_version, current_unicode_version, sizeof(wanted_version)) > 0) {
+                    fprintf(stderr, "Requested unicode version (%s) is higher than existent and/or supported (%s)\n", optarg, U_UNICODE_VERSION);
+                    return EXIT_FAILURE;
+                }
+                break;
+            }
+            default:
+                usage();
+        }
+    }
+    argc -= optind;
+    argv += optind;
+
 //     unorm = unorm2_getNFDInstance(&status);
     unorm = unorm2_getNFKDInstance(&status);
     if (U_FAILURE(status)) {
@@ -86,6 +206,14 @@ int main(void)
         if (U_FAILURE(status)) {
             fprintf(stderr, "unorm2_normalize failed with %s\n", u_errorName(status));
             goto end;
+        }
+        if (vflag) {
+            UVersionInfo char_version;
+
+            u_charAge(c, char_version);
+            if (memcmp(char_version, wanted_version, sizeof(wanted_version)) > 0) {
+                continue;
+            }
         }
         if ((letter = accept_as(res[0])) >= 0) {
             ubrk_setText(ubrk, res, res_len, &status);
