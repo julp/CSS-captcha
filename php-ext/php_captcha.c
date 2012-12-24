@@ -13,6 +13,9 @@
 #define STR_LEN(str)      (ARRAY_SIZE(str) - 1)
 #define STR_SIZE(str)     (ARRAY_SIZE(str))
 
+#define CAPTCHA_CLASS_NAME "CSSCaptcha"
+#define CAPTCHA_INI_PREFIX "captcha"
+
 #define CAPTCHA_CSS  (1 << 0)
 #define CAPTCHA_HTML (1 << 1)
 
@@ -412,7 +415,7 @@ static const char *ignorables[] = {
     "\\0009", "\\000A", "\\000C", "\\000D", "\\0020", "\\00A0",
     "\\1680", "\\180E", "\\2000", "\\2001", "\\2002", "\\2003",
     "\\2004", "\\2005", "\\2006", "\\2007", "\\2008", "\\2009",
-    "\\200A", "\\2028", "\\2029", "\\202F", "\\205F", "\\3000",
+    "\\200A", "\\2028", "\\2029", "\\202F", "\\205F", "\\3000"
 };
 
 static const char shuffling[] = {
@@ -579,6 +582,7 @@ PHP_METHOD(Captcha, __construct)
 
 PHP_FUNCTION(captcha_render)
 {
+    long noise = 0;
     zval *object = NULL;
     smart_str ret = { 0 };
     Captcha_object *co = NULL;
@@ -601,10 +605,33 @@ PHP_FUNCTION(captcha_render)
 
             smart_str_append_static(&ret, "#captcha span:nth-child(");
             smart_str_append_long(&ret, index[i] + 1);
-            smart_str_append_static(&ret, "):after { content: \"\\");
+            smart_str_append_static(&ret, "):after { content: \"");
+            if (CAPTCHA_G(noise_length)) {
+                noise = captcha_rand(CAPTCHA_G(noise_length) TSRMLS_CC);
+                if (noise) {
+                    long l;
+
+                    for (l = 0; l < noise; l++) {
+                        e = ignorables[captcha_rand(ARRAY_SIZE(ignorables) - 1 TSRMLS_CC)];
+                        smart_str_appends(&ret, e);
+                    }
+                }
+            }
+            smart_str_appendc(&ret, '\\');
             p = char2int(Z_STRVAL_P(co->challenge)[index[i]]);
             e = table[p].tbl[captcha_rand(table[p].length - 1 TSRMLS_CC)];
             smart_str_appends(&ret, e);
+            if (CAPTCHA_G(noise_length)) {
+                noise = captcha_rand(CAPTCHA_G(noise_length) TSRMLS_CC);
+                if (noise) {
+                    long l;
+
+                    for (l = 0; l < noise; l++) {
+                        e = ignorables[captcha_rand(ARRAY_SIZE(ignorables) - 1 TSRMLS_CC)];
+                        smart_str_appends(&ret, e);
+                    }
+                }
+            }
             smart_str_append_static(&ret, "\"; }\n");
         }
         smart_str_append_static(&ret, "</style>\n");
@@ -734,7 +761,7 @@ ZEND_API ZEND_INI_MH(OnUpdateChallengeLength)
     if (tmp > MAX_CHALLENGE_LENGTH) {
         int err_type;
 
-        if (stage == ZEND_INI_STAGE_RUNTIME) {
+        if (ZEND_INI_STAGE_RUNTIME == stage) {
             err_type = E_WARNING;
         } else {
             err_type = E_ERROR;
@@ -750,9 +777,10 @@ ZEND_API ZEND_INI_MH(OnUpdateChallengeLength)
 }
 
 PHP_INI_BEGIN()
-    STD_PHP_INI_ENTRY("captcha.challenge_length", "8", PHP_INI_ALL, OnUpdateChallengeLength, challenge_length, zend_captcha_globals, captcha_globals)
-    STD_PHP_INI_ENTRY("captcha.fake_characters", "2", PHP_INI_ALL, OnUpdateLong, fake_characters, zend_captcha_globals, captcha_globals)
-    STD_PHP_INI_ENTRY("captcha.session_prefix", "captcha_", PHP_INI_ALL, OnUpdateStringUnempty, session_prefix, zend_captcha_globals, captcha_globals)
+    STD_PHP_INI_ENTRY(CAPTCHA_INI_PREFIX ".challenge_length", "8", PHP_INI_ALL, OnUpdateChallengeLength, challenge_length, zend_captcha_globals, captcha_globals)
+//     STD_PHP_INI_ENTRY(CAPTCHA_INI_PREFIX ".fake_characters_length", "2", PHP_INI_ALL, OnUpdateLong, fake_characters, zend_captcha_globals, captcha_globals)
+    STD_PHP_INI_ENTRY(CAPTCHA_INI_PREFIX ".noise_length", "2", PHP_INI_ALL, OnUpdateLong, noise_length, zend_captcha_globals, captcha_globals)
+    STD_PHP_INI_ENTRY(CAPTCHA_INI_PREFIX ".session_prefix", "captcha_", PHP_INI_ALL, OnUpdateStringUnempty, session_prefix, zend_captcha_globals, captcha_globals)
 PHP_INI_END()
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_captcha_void, 0, 0, 1)
@@ -850,7 +878,7 @@ static PHP_MINIT_FUNCTION(captcha)
 
     REGISTER_INI_ENTRIES();
 
-    INIT_CLASS_ENTRY(ce, "CSSCaptcha", Captcha_class_functions);
+    INIT_CLASS_ENTRY(ce, CAPTCHA_CLASS_NAME, Captcha_class_functions);
     ce.create_object = Captcha_object_create;
     Captcha_ce_ptr = zend_register_internal_class(&ce TSRMLS_CC);
     memcpy(&Captcha_handlers, zend_get_std_object_handlers(), sizeof(zend_object_handlers));
@@ -871,7 +899,7 @@ static PHP_MSHUTDOWN_FUNCTION(captcha)
 static PHP_MINFO_FUNCTION(captcha)
 {
     php_info_print_table_start();
-    php_info_print_table_header(2, "CSS Captcha", "enabled");
+    php_info_print_table_row(2, "CSS Captcha", "enabled");
     php_info_print_table_end();
 
     DISPLAY_INI_ENTRIES();

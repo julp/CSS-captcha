@@ -22,6 +22,7 @@ extern zend_class_entry *Captcha_ce_ptr;
 ZEND_BEGIN_MODULE_GLOBALS(captcha)
     long challenge_length;
     long fake_characters;
+    long noise_length;
     char *session_prefix;
 ZEND_END_MODULE_GLOBALS(captcha)
 

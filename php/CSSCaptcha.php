@@ -11,6 +11,7 @@ class CSSCaptcha {
     const FAKE_CHARACTERS_COUNT = 2;     // number of fake characters generated in HTML/CSS
     const ONLY_LTR         = FALSE;      // set FALSE to allow random float: right;
 
+    public static $noise_length = 2;
     public static $fake_character_style   = 'display: none;';
     public static $normal_character_style = '';
 
@@ -365,14 +366,18 @@ class CSSCaptcha {
 
     protected static function generateIgnorables()
     {
-        return implode(
-            array_intersect_key(
-                self::$_ignorables,
-                array_flip(
-                    (array) array_rand(self::$_ignorables, rand(0, 2))
+        if (self::$noise_length && ($noise = rand(0, self::$noise_length))) {
+            return implode(
+                array_intersect_key(
+                    self::$_ignorables,
+                    array_flip(
+                        (array) array_rand(self::$_ignorables, $noise)
+                    )
                 )
-            )
-        );
+            );
+        } else {
+            return '';
+        }
     }
 
     public function __construct($key, $challenge = NULL)

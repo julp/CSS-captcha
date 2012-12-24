@@ -2,7 +2,6 @@
 header('Content-Type: text/html; charset=utf-8');
 session_start();
 include('CSSCaptcha.php');
-ini_set('display_errors', FALSE); // hide array_rand warning
 use Julp\CSSCaptcha;
 ?>
 <!DOCTYPE html>

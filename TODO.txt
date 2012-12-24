@@ -1,12 +1,22 @@
 * play with CSS3 selector ? (first, last, nth)
 * placement, right to left, left to right (float) ?
+    => experimental for php only
 * insert fake empty (\s) element ?
+    => not really relevant ?
 * [done?] insert random \s before and after ?
 * don't generate class from first character to last one: shuffle them ?
 * play with position and/or overflow ?
 * [done?] insert fake hidden element (display: none) ?
+    => php only ; c : todo ; allow user to set CSS code (not necessary display: none ; allow to play on colors?)
 * remove confusables ?
   - lower L
   - upper I
   - upper O
 * remove code points newer than Unicode 5.0.0 ? (see unicode/uchar.h, function u_charAge and unicode/uversion.h, function u_versionFromString, then memcmp both)
+    => implemented, everyone can generate its own tables
+* generate a random id instead of <div id="captcha"> ? (without digits)
+
+CSS obfuscation:
+* synonyms for nth-child ? 1/X = first-child, X/X = last-child, ...
+* mathematical expressions for nth-child ? (5 => 3 + 2 ?)
+* random comments (/* ... */)
