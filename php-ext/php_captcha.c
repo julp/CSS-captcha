@@ -447,6 +447,9 @@ static const char shuffling[] = {
         strcat(name, co->key);                                                            \
     } while (0);
 
+#define SESSION_IS_ACTIVE() \
+    (PS(http_session_vars) && IS_ARRAY == PS(http_session_vars)->type)
+
 ZEND_DECLARE_MODULE_GLOBALS(captcha)
 
 static void php_string_shuffle(char *str, long len TSRMLS_DC)
@@ -504,7 +507,7 @@ static void captcha_fetch_or_create_challenge(Captcha_object* co TSRMLS_DC)
     size_t name_len;
     zval **vpp;
 
-    if (PS(http_session_vars) && IS_ARRAY == PS(http_session_vars)->type) {
+    if (SESSION_IS_ACTIVE()) {
         COMPLETE_SESSION_KEY(co, name, name_len);
         if (SUCCESS == zend_symtable_find(Z_ARRVAL_P(PS(http_session_vars)), name, name_len + 1, (void **) &vpp) && IS_STRING == Z_TYPE_PP(vpp)) {
             co->challenge = *vpp;
@@ -711,10 +714,14 @@ PHP_FUNCTION(captcha_cleanup)
     if (FAILURE == zend_parse_method_parameters(ZEND_NUM_ARGS() TSRMLS_CC, getThis(), "O", &object, Captcha_ce_ptr)) {
         RETURN_FALSE;
     }
-    CAPTCHA_FETCH_OBJ(co, object);
-    COMPLETE_SESSION_KEY(co, name, name_len);
-    if (SUCCESS == zend_hash_del(Z_ARRVAL_P(PS(http_session_vars)), name, name_len + 1)) {
-        RETURN_TRUE;
+    if (SESSION_IS_ACTIVE()) {
+        CAPTCHA_FETCH_OBJ(co, object);
+        COMPLETE_SESSION_KEY(co, name, name_len);
+        if (SUCCESS == zend_hash_del(Z_ARRVAL_P(PS(http_session_vars)), name, name_len + 1)) {
+            RETURN_TRUE;
+        } else {
+            RETURN_FALSE;
+        }
     } else {
         RETURN_FALSE;
     }
