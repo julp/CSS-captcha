@@ -505,12 +505,21 @@ static void captcha_fetch_or_create_challenge(Captcha_object* co TSRMLS_DC)
 {
     char *name;
     size_t name_len;
-    zval **vpp;
+    zval **zcontainer, **zchallenge, **zattemps;
 
     if (SESSION_IS_ACTIVE()) {
         COMPLETE_SESSION_KEY(co, name, name_len);
-        if (SUCCESS == zend_symtable_find(Z_ARRVAL_P(PS(http_session_vars)), name, name_len + 1, (void **) &vpp) && IS_STRING == Z_TYPE_PP(vpp)) {
-            co->challenge = *vpp;
+        if (
+            SUCCESS == zend_symtable_find(Z_ARRVAL_P(PS(http_session_vars)), name, name_len + 1, (void **) &zcontainer)
+            && IS_ARRAY == Z_TYPE_PP(zcontainer)
+            && SUCCESS == zend_hash_find(Z_ARRVAL_PP(zcontainer), "challenge", sizeof("challenge"), (void **) &zchallenge)
+            && IS_STRING == Z_TYPE_PP(zchallenge)
+            && SUCCESS == zend_hash_find(Z_ARRVAL_PP(zcontainer), "attempts", sizeof("attempts"), (void **) &zattemps)
+            && IS_LONG == Z_TYPE_PP(zattemps)
+        ) {
+            co->container = *zcontainer;
+            co->challenge = *zchallenge;
+            co->attempts = *zattemps;
         } else {
             long challenge_len;
             const char *challenge;
@@ -518,7 +527,15 @@ static void captcha_fetch_or_create_challenge(Captcha_object* co TSRMLS_DC)
             GENERATE_CHALLENGE(challenge, challenge_len);
             ALLOC_INIT_ZVAL(co->challenge);
             ZVAL_STRINGL(co->challenge, challenge, challenge_len, 0);
-            ZEND_SET_SYMBOL_WITH_LENGTH(Z_ARRVAL_P(PS(http_session_vars)), name, name_len + 1, co->challenge, 1, 0);
+
+            ALLOC_INIT_ZVAL(co->attempts);
+            ZVAL_LONG(co->attempts, 0);
+
+            ALLOC_INIT_ZVAL(co->container);
+            array_init(co->container);
+            add_assoc_zval_ex(co->container, "attempts", sizeof("attempts"), co->attempts);
+            add_assoc_zval_ex(co->container, "challenge", sizeof("challenge"), co->challenge);
+            ZEND_SET_SYMBOL_WITH_LENGTH(Z_ARRVAL_P(PS(http_session_vars)), name, name_len + 1, co->container, 1, 0);
         }
         efree(name);
     } else {
@@ -671,6 +688,7 @@ PHP_FUNCTION(captcha_renew)
     GENERATE_CHALLENGE(challenge, challenge_len);
     zval_dtor(co->challenge);
     ZVAL_STRINGL(co->challenge, challenge, challenge_len, 0);
+    ZVAL_LONG(co->attempts, 0);
 }
 
 PHP_FUNCTION(captcha_validate)
@@ -684,6 +702,7 @@ PHP_FUNCTION(captcha_validate)
         RETURN_FALSE;
     }
     CAPTCHA_FETCH_OBJ(co, object);
+    ++Z_LVAL_P(co->attempts);
     if (input_len == Z_STRLEN_P(co->challenge) && 0 == memcmp(input, Z_STRVAL_P(co->challenge), Z_STRLEN_P(co->challenge))) {
         RETURN_TRUE;
     } else {
@@ -738,6 +757,19 @@ PHP_FUNCTION(captcha_get_challenge)
     CAPTCHA_FETCH_OBJ(co, object);
 
     MAKE_COPY_ZVAL(&co->challenge, return_value);
+}
+
+PHP_FUNCTION(captcha_get_attempts)
+{
+    zval *object = NULL;
+    Captcha_object *co = NULL;
+
+    if (FAILURE == zend_parse_method_parameters(ZEND_NUM_ARGS() TSRMLS_CC, getThis(), "O", &object, Captcha_ce_ptr)) {
+        RETURN_FALSE;
+    }
+    CAPTCHA_FETCH_OBJ(co, object);
+
+    MAKE_COPY_ZVAL(&co->attempts, return_value);
 }
 
 static PHP_METHOD(Captcha, __wakeup)
@@ -812,6 +844,7 @@ static const zend_function_entry captcha_functions[] = {
     PHP_FE(captcha_cleanup, arginfo_captcha_void)
     PHP_FE(captcha_get_key, arginfo_captcha_void)
     PHP_FE(captcha_get_challenge, arginfo_captcha_void)
+    PHP_FE(captcha_get_attempts, arginfo_captcha_void)
     PHP_FE_END
 };
 
@@ -847,6 +880,7 @@ zend_function_entry Captcha_class_functions[] = {
     PHP_ME_MAPPING(cleanup, captcha_cleanup, ainfo_captcha_void, ZEND_ACC_PUBLIC)
     PHP_ME_MAPPING(getKey, captcha_get_key, ainfo_captcha_void, ZEND_ACC_PUBLIC)
     PHP_ME_MAPPING(getChallenge, captcha_get_challenge, ainfo_captcha_void, ZEND_ACC_PUBLIC)
+    PHP_ME_MAPPING(getAttempts, captcha_get_attempts, ainfo_captcha_void, ZEND_ACC_PUBLIC)
     PHP_FE_END
 };
 
@@ -912,12 +946,6 @@ static PHP_MINFO_FUNCTION(captcha)
     DISPLAY_INI_ENTRIES();
 }
 
-#if 0
-static PHP_GINIT_FUNCTION(captcha)
-{
-}
-#endif
-
 static const zend_module_dep captcha_deps[] = {
     ZEND_MOD_REQUIRED("session")
     ZEND_MOD_END
@@ -936,7 +964,6 @@ zend_module_entry captcha_module_entry = {
     PHP_MINFO(captcha),
     NO_VERSION_YET,
     PHP_MODULE_GLOBALS(captcha),
-//     PHP_GINIT(captcha),
     NULL,
     NULL,
     NULL,

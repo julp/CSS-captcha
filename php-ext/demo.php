@@ -16,6 +16,9 @@ if (isset($_POST['captcha'])) {
     if ($captcha->validate($_POST['captcha'])) {
         $captcha->renew();
         echo '<p>You pass. New token created.</p>';
+    } else if ($captcha->getAttempts() > 9) {
+        $captcha->renew();
+        echo '<p>Too many failures, new token created.</p>';
     } else {
         echo '<p>You fail.</p>';
     }
@@ -29,6 +32,7 @@ if (isset($_POST['captcha'])) {
                 Captcha : <input type="text" name="captcha"/> (only lower cased letter and digit)
             </div>
             <p>Expect: <?php var_dump($captcha->getChallenge()); ?></p>
+            <p>Attempts: <?php var_dump($captcha->getAttempts()); ?></p>
             <input type="submit" value="Envoyer"/>
         </form>
     </body>

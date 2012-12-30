@@ -10,7 +10,9 @@ typedef struct {
 
     char *key;
     long key_len;
+    zval *container;
     zval *challenge;
+    zval *attempts;
 } Captcha_object;
 
 extern zend_class_entry *Captcha_ce_ptr;
@@ -21,19 +23,15 @@ extern zend_class_entry *Captcha_ce_ptr;
 
 ZEND_BEGIN_MODULE_GLOBALS(captcha)
     long challenge_length;
-    long fake_characters;
+//     long fake_characters_length;
     long noise_length;
     char *session_prefix;
 ZEND_END_MODULE_GLOBALS(captcha)
 
-/* Macro to access request-wide global variables. */
 # ifdef ZTS
 #  define CAPTCHA_G(v) TSRMG(captcha_globals_id, zend_captcha_globals *, v)
 # else
 #  define CAPTCHA_G(v) (captcha_globals.v)
 # endif /* ZTS */
-
-// PHP_FUNCTION(collator_create);
-// PHP_METHOD(Collator, __construct);
 
 #endif /* !PHP_CAPTCHA_H */
