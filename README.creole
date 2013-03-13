@@ -1,0 +1,76 @@
+== Description ==
+
+Run dependency: only PHP's session extension (no gd extension)
+
+== Implementation ==
+
+=== As a PHP extension ===
+
+==== INI settings ====
+
+* captcha.challenge_length (default: 8): integer, maximum 16, challenge length.
+* captcha.fake_characters_length (default: 2): integer, from 0 (disabled) to 16, number of irrelevant characters added to the challenge when displayed.
+* captcha.noise_length (default: 2): integer (0 for none), define the maximum number of noisy characters to add before and after each character composing the challenge. A random number of whitespaces (may be punctuations in the future) will be picked between 0 and this maximum.
+* captcha.session_prefix (default: "captcha_"): string, prefix prepended to session key to minimize risks of overwrites
+* captcha.fake_characters_style (default: "display: none"): string, fragment of CSS code to append to irrelevant characters of the challenge
+* captcha.significant_characters_style (default: ""): string, fragment of CSS code to append to significant characters of the challenge
+
+==== Functions ====
+
+* create a captcha object: {{{ object captcha_create(string $key) or Captcha::__construct(string $key)}}}
+* render captcha (HTML and CSS can be obtained separately): {{{ string captcha_render(object $captcha [, integer $what = Captcha::HTML | Captcha::CSS ]) or string Captcha::render([ integer $what = Captcha::HTML | Captcha::CSS ])}}}
+* does user input match current challenge (case insensitive and internal counter for attempts incremented): {{{ boolean captcha_validate(object $captcha, string $input) or boolean Captcha::validate(string $input) }}}
+* renew challenge: {{{ void captcha_renew(object $captcha) or void Captcha::renew() }}}
+* cleanup session (remove session key): {{{ void captcha_cleanup(object $captcha) or void Captcha::cleanup() }}}
+* get initial key associated to the captcha: {{{ string captcha_get_key(object $captcha) or string Captcha::get_key() }}}
+* get current challenge: {{{ string captcha_get_challenge(object $captcha) or string Captcha::get_challenge() }}}
+* get the number of attempts: {{{ integer captcha_get_attempts(object $captcha) or integer Captcha::get_attempts() }}}
+
+==== Example ====
+
+{{{
+<?php
+ini_set('captcha.fake_characters_style', 'color: red');
+ini_set('captcha.significant_characters_style', 'color: blue');
+
+header('Content-Type: text/html; charset=utf-8');
+session_start();
+?>
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+    </head>
+    <body>
+<?php
+define('MAX_ATTEMPTS', 10);
+define('KEY', pathinfo(__FILE__, PATHINFO_FILENAME));
+
+if (isset($_POST['captcha'])) {
+    $captcha = new CSSCaptcha(KEY);
+    if ($captcha->validate($_POST['captcha'])) {
+        // pass
+    } else if ($captcha->getAttempts() >= MAX_ATTEMPTS) {
+        $captcha->renew();
+        // Too many failures, new token created
+    } else {
+        // fail
+    }
+} else  {
+    $captcha = new CSSCaptcha(KEY);
+}
+?>
+        <form method="post" action="">
+            <?php echo $captcha->render(); ?>
+            <div style="clear: both;">
+                Captcha : <input type="text" name="captcha"/> (enter only blue characters)
+            </div>
+            <input type="submit" value="Envoyer"/>
+        </form>
+    </body>
+</html>
+}}}
+
+=== Plain PHP ===
+
+TODO

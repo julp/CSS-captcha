@@ -4,15 +4,14 @@
 * insert fake empty (\s) element ?
     => not really relevant ?
 * [done?] insert random \s before and after ?
-* don't generate class from first character to last one: shuffle them ?
+* [done?] don't generate class from first character to last one: shuffle them ?
 * play with position and/or overflow ?
-* [done?] insert fake hidden element (display: none) ?
-    => php only ; c : todo ; allow user to set CSS code (not necessary display: none ; allow to play on colors?)
+* [done?] insert fake hidden element (display: none) ? + allow user to set CSS code (not necessary display: none ; allow to play on colors?)
 * remove confusables ?
   - lower L
   - upper I
   - upper O
-* remove code points newer than Unicode 5.0.0 ? (see unicode/uchar.h, function u_charAge and unicode/uversion.h, function u_versionFromString, then memcmp both)
+* [done?] remove code points newer than Unicode 5.0.0 ? (see unicode/uchar.h, function u_charAge and unicode/uversion.h, function u_versionFromString, then memcmp both)
     => implemented, everyone can generate its own tables
 * generate a random id instead of <div id="captcha"> ? (without digits)
 

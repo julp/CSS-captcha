@@ -3,7 +3,7 @@
 # define PHP_CAPTCHA_H 1
 
 extern zend_module_entry captcha_module_entry;
-#define phpext_captcha_ptr &captcha_module_entry
+# define phpext_captcha_ptr &captcha_module_entry
 
 typedef struct {
     zend_object zo;
@@ -13,6 +13,7 @@ typedef struct {
     zval *container;
     zval *challenge;
     zval *attempts;
+    zval *fakes;
 } Captcha_object;
 
 extern zend_class_entry *Captcha_ce_ptr;
@@ -23,9 +24,11 @@ extern zend_class_entry *Captcha_ce_ptr;
 
 ZEND_BEGIN_MODULE_GLOBALS(captcha)
     long challenge_length;
-//     long fake_characters_length;
+    long fake_characters_length;
     long noise_length;
     char *session_prefix;
+    char *fake_characters_style;
+    char *significant_characters_style;
 ZEND_END_MODULE_GLOBALS(captcha)
 
 # ifdef ZTS

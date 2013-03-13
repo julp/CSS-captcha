@@ -419,10 +419,11 @@ static const char *ignorables[] = {
 };
 
 static const char shuffling[] = {
-    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
+    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* reserved to challenge characters */
+    0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F  /* reserved to fake characters */
 };
 
-#define MAX_CHALLENGE_LENGTH (ARRAY_SIZE(shuffling))
+#define MAX_CHALLENGE_LENGTH (ARRAY_SIZE(shuffling) / 2)
 
 #define CAPTCHA_FETCH_OBJ(/*Captcha_object **/ co, /*zval **/ object)                                              \
     do {                                                                                                           \
@@ -431,12 +432,6 @@ static const char shuffling[] = {
             php_error_docref(NULL TSRMLS_CC, E_WARNING, "Invalid or unitialized %s object", Captcha_ce_ptr->name); \
             RETURN_FALSE;                                                                                          \
         }                                                                                                          \
-    } while (0);
-
-#define GENERATE_CHALLENGE(/*char **/ challenge, /*long*/ challenge_len) \
-    do {                                                                 \
-        challenge_len = CAPTCHA_G(challenge_length);                     \
-        challenge = random_string(challenge_len TSRMLS_CC);              \
     } while (0);
 
 #define COMPLETE_SESSION_KEY(/*Captcha_object **/ co, /*char **/ name, /*long*/ name_len) \
@@ -501,16 +496,17 @@ static char *random_string(long length TSRMLS_DC)
     return k;
 }
 
-static void captcha_fetch_or_create_challenge(Captcha_object* co TSRMLS_DC)
+static void captcha_fetch_or_create_challenge(Captcha_object* co, int renew TSRMLS_DC)
 {
     char *name;
     size_t name_len;
-    zval **zcontainer, **zchallenge, **zattemps;
+    zval **zcontainer, **zchallenge, **zattemps, **zfakes;
 
     if (SESSION_IS_ACTIVE()) {
         COMPLETE_SESSION_KEY(co, name, name_len);
         if (
-            SUCCESS == zend_symtable_find(Z_ARRVAL_P(PS(http_session_vars)), name, name_len + 1, (void **) &zcontainer)
+            !renew
+            && SUCCESS == zend_symtable_find(Z_ARRVAL_P(PS(http_session_vars)), name, name_len + 1, (void **) &zcontainer)
             && IS_ARRAY == Z_TYPE_PP(zcontainer)
             && SUCCESS == zend_hash_find(Z_ARRVAL_PP(zcontainer), "challenge", sizeof("challenge"), (void **) &zchallenge)
             && IS_STRING == Z_TYPE_PP(zchallenge)
@@ -520,11 +516,21 @@ static void captcha_fetch_or_create_challenge(Captcha_object* co TSRMLS_DC)
             co->container = *zcontainer;
             co->challenge = *zchallenge;
             co->attempts = *zattemps;
+            co->fakes = NULL;
+            if (
+                SUCCESS == zend_hash_find(Z_ARRVAL_PP(zcontainer), "fakes", sizeof("fakes"), (void **) &zfakes)
+                && IS_ARRAY == Z_TYPE_PP(zfakes)
+                && zend_hash_num_elements(Z_ARRVAL_PP(zfakes)) > 0
+            ) {
+                co->fakes = *zfakes;
+            }
         } else {
             long challenge_len;
             const char *challenge;
 
-            GENERATE_CHALLENGE(challenge, challenge_len);
+            co->fakes = NULL;
+            challenge_len = CAPTCHA_G(challenge_length);                     \
+            challenge = random_string(challenge_len TSRMLS_CC);
             ALLOC_INIT_ZVAL(co->challenge);
             ZVAL_STRINGL(co->challenge, challenge, challenge_len, 0);
 
@@ -535,6 +541,20 @@ static void captcha_fetch_or_create_challenge(Captcha_object* co TSRMLS_DC)
             array_init(co->container);
             add_assoc_zval_ex(co->container, "attempts", sizeof("attempts"), co->attempts);
             add_assoc_zval_ex(co->container, "challenge", sizeof("challenge"), co->challenge);
+            if (CAPTCHA_G(fake_characters_length)) {
+                int i;
+                char index[MAX_CHALLENGE_LENGTH];
+
+                memcpy(index, shuffling, challenge_len);
+                php_string_shuffle(index, challenge_len TSRMLS_CC);
+
+                ALLOC_INIT_ZVAL(co->fakes);
+                array_init(co->fakes);
+                for (i = 0; i < CAPTCHA_G(fake_characters_length); i++) {
+                    add_index_stringl(co->fakes, index[i], alphabet + captcha_rand(STR_LEN(alphabet) - 1 TSRMLS_CC), 1, 1);
+                }
+                add_assoc_zval_ex(co->container, "fakes", sizeof("fakes"), co->fakes);
+            }
             ZEND_SET_SYMBOL_WITH_LENGTH(Z_ARRVAL_P(PS(http_session_vars)), name, name_len + 1, co->container, 1, 0);
         }
         efree(name);
@@ -566,7 +586,7 @@ static void captcha_ctor(INTERNAL_FUNCTION_PARAMETERS)
         co->key = estrdup(key);
         co->key_len = key_len;
     }
-    captcha_fetch_or_create_challenge(co TSRMLS_CC);
+    captcha_fetch_or_create_challenge(co, 0 TSRMLS_CC);
 }
 
 PHP_FUNCTION(captcha_create)
@@ -600,66 +620,112 @@ PHP_METHOD(Captcha, __construct)
 #define char2int(/*char*/ c) \
     ((c & 0x40) ? (10 + c - 0x61) : (c - 0x30))
 
+static void generate_char(smart_str *ret, Captcha_object *co, long index, char c, int significant TSRMLS_DC)
+{
+    long noise, p;
+    const char *e;
+
+    smart_str_append_static(ret, "#captcha span:nth-child(");
+    smart_str_append_long(ret, index + 1);
+    smart_str_append_static(ret, "):after { content: \"");
+    if (CAPTCHA_G(noise_length)) {
+        noise = captcha_rand(CAPTCHA_G(noise_length) TSRMLS_CC);
+        if (noise) {
+            long l;
+
+            for (l = 0; l < noise; l++) {
+                e = ignorables[captcha_rand(ARRAY_SIZE(ignorables) - 1 TSRMLS_CC)];
+                smart_str_appends(ret, e);
+            }
+        }
+    }
+    smart_str_appendc(ret, '\\');
+    p = char2int(c);
+    e = table[p].tbl[captcha_rand(table[p].length - 1 TSRMLS_CC)];
+    smart_str_appends(ret, e);
+    if (CAPTCHA_G(noise_length)) {
+        noise = captcha_rand(CAPTCHA_G(noise_length) TSRMLS_CC);
+        if (noise) {
+            long l;
+
+            for (l = 0; l < noise; l++) {
+                e = ignorables[captcha_rand(ARRAY_SIZE(ignorables) - 1 TSRMLS_CC)];
+                smart_str_appends(ret, e);
+            }
+        }
+    }
+    smart_str_append_static(ret, "\"; ");
+    if (significant) {
+        smart_str_appends(ret, CAPTCHA_G(significant_characters_style));
+    } else {
+        smart_str_appends(ret, CAPTCHA_G(fake_characters_style));
+    }
+    smart_str_append_static(ret, " }\n");
+}
+
+#define UNINITIALIZED_CHAR 0x81
+#define UNSIGNIFICANT_CHAR 0x82
 PHP_FUNCTION(captcha_render)
 {
-    long noise = 0;
     zval *object = NULL;
     smart_str ret = { 0 };
     Captcha_object *co = NULL;
-    long what = CAPTCHA_CSS | CAPTCHA_HTML;
+    long total_len, /*noise = 0,*/ what = CAPTCHA_CSS | CAPTCHA_HTML;
 
     if (FAILURE == zend_parse_method_parameters(ZEND_NUM_ARGS() TSRMLS_CC, getThis(), "O", &object, Captcha_ce_ptr, &what)) {
         RETURN_FALSE;
     }
     CAPTCHA_FETCH_OBJ(co, object);
 
+    if (NULL == co->fakes) {
+        total_len = Z_STRLEN_P(co->challenge);
+    } else {
+        total_len = Z_STRLEN_P(co->challenge) + zend_hash_num_elements(Z_ARRVAL_P(co->fakes));
+    }
     if (what & CAPTCHA_CSS) {
-        long i, p;
-        char index[MAX_CHALLENGE_LENGTH];
+        long i;
+        unsigned char index[ARRAY_SIZE(shuffling)], map[ARRAY_SIZE(shuffling)];
 
         smart_str_append_static(&ret, "<style type=\"text/css\">\n");
-        memcpy(index, shuffling, Z_STRLEN_P(co->challenge));
-        php_string_shuffle(index, Z_STRLEN_P(co->challenge) TSRMLS_CC);
-        for (i = 0; i < Z_STRLEN_P(co->challenge); i++) {
-            const char *e;
+        memcpy(index, shuffling, total_len);
+        php_string_shuffle(index, total_len TSRMLS_CC);
+        if (NULL != co->fakes) {
+            long j;
+            char *str_index;
+            ulong num_index;
+            HashPosition pos;
 
-            smart_str_append_static(&ret, "#captcha span:nth-child(");
-            smart_str_append_long(&ret, index[i] + 1);
-            smart_str_append_static(&ret, "):after { content: \"");
-            if (CAPTCHA_G(noise_length)) {
-                noise = captcha_rand(CAPTCHA_G(noise_length) TSRMLS_CC);
-                if (noise) {
-                    long l;
-
-                    for (l = 0; l < noise; l++) {
-                        e = ignorables[captcha_rand(ARRAY_SIZE(ignorables) - 1 TSRMLS_CC)];
-                        smart_str_appends(&ret, e);
-                    }
+            memset(map, UNINITIALIZED_CHAR, total_len);
+            zend_hash_internal_pointer_reset_ex(Z_ARRVAL_P(co->fakes), &pos);
+            while (HASH_KEY_IS_LONG == zend_hash_get_current_key_ex(Z_ARRVAL_P(co->fakes), &str_index, NULL, &num_index, 0, &pos)) {
+                map[num_index] = UNSIGNIFICANT_CHAR;
+                zend_hash_move_forward_ex(Z_ARRVAL_P(co->fakes), &pos);
+            }
+            for (i = j = 0; i < Z_STRLEN_P(co->challenge); j++) {
+                if (UNINITIALIZED_CHAR == map[j]) {
+                    map[j] = i++;
                 }
             }
-            smart_str_appendc(&ret, '\\');
-            p = char2int(Z_STRVAL_P(co->challenge)[index[i]]);
-            e = table[p].tbl[captcha_rand(table[p].length - 1 TSRMLS_CC)];
-            smart_str_appends(&ret, e);
-            if (CAPTCHA_G(noise_length)) {
-                noise = captcha_rand(CAPTCHA_G(noise_length) TSRMLS_CC);
-                if (noise) {
-                    long l;
+        } else {
+            memcpy(map, shuffling, total_len);
+        }
+        for (i = 0; i < total_len; i++) {
+            if (UNSIGNIFICANT_CHAR == map[index[i]]) {
+                zval **zchar;
 
-                    for (l = 0; l < noise; l++) {
-                        e = ignorables[captcha_rand(ARRAY_SIZE(ignorables) - 1 TSRMLS_CC)];
-                        smart_str_appends(&ret, e);
-                    }
+                if (SUCCESS == zend_hash_index_find(Z_ARRVAL_P(co->fakes), (ulong) index[i], (void **) &zchar)) {
+                    generate_char(&ret, co, index[i], Z_STRVAL_PP(zchar)[0], 0 TSRMLS_CC);
                 }
+            } else {
+                generate_char(&ret, co, index[i], Z_STRVAL_P(co->challenge)[map[index[i]]], 1 TSRMLS_CC);
             }
-            smart_str_append_static(&ret, "\"; }\n");
         }
         smart_str_append_static(&ret, "</style>\n");
     }
 
     if (what & CAPTCHA_HTML) {
         smart_str_append_static(&ret, "<div id=\"captcha\">");
-        smart_str_append_static_repeated(&ret, Z_STRLEN_P(co->challenge), "<span></span>");
+        smart_str_append_static_repeated(&ret, total_len, "<span></span>");
         smart_str_append_static(&ret, "</div>");
     }
 
@@ -675,20 +741,12 @@ PHP_FUNCTION(captcha_renew)
 {
     zval *object;
     Captcha_object* co;
-    char *input = NULL;
-    long input_len = 0;
-    long challenge_len;
-    const char *challenge;
 
     if (FAILURE == zend_parse_method_parameters(ZEND_NUM_ARGS() TSRMLS_CC, getThis(), "O", &object, Captcha_ce_ptr)) {
         RETURN_FALSE;
     }
     CAPTCHA_FETCH_OBJ(co, object);
-    captcha_fetch_or_create_challenge(co TSRMLS_CC);
-    GENERATE_CHALLENGE(challenge, challenge_len);
-    zval_dtor(co->challenge);
-    ZVAL_STRINGL(co->challenge, challenge, challenge_len, 0);
-    ZVAL_LONG(co->attempts, 0);
+    captcha_fetch_or_create_challenge(co, 1 TSRMLS_CC);
 }
 
 PHP_FUNCTION(captcha_validate)
@@ -703,7 +761,7 @@ PHP_FUNCTION(captcha_validate)
     }
     CAPTCHA_FETCH_OBJ(co, object);
     ++Z_LVAL_P(co->attempts);
-    if (input_len == Z_STRLEN_P(co->challenge) && 0 == memcmp(input, Z_STRVAL_P(co->challenge), Z_STRLEN_P(co->challenge))) {
+    if (input_len == Z_STRLEN_P(co->challenge) && 0 == zend_binary_strcasecmp(input, input_len, Z_STRVAL_P(co->challenge), Z_STRLEN_P(co->challenge))) {
         RETURN_TRUE;
     } else {
         RETURN_FALSE;
@@ -817,9 +875,11 @@ ZEND_API ZEND_INI_MH(OnUpdateChallengeLength)
 
 PHP_INI_BEGIN()
     STD_PHP_INI_ENTRY(CAPTCHA_INI_PREFIX ".challenge_length", "8", PHP_INI_ALL, OnUpdateChallengeLength, challenge_length, zend_captcha_globals, captcha_globals)
-//     STD_PHP_INI_ENTRY(CAPTCHA_INI_PREFIX ".fake_characters_length", "2", PHP_INI_ALL, OnUpdateLong, fake_characters, zend_captcha_globals, captcha_globals)
+    STD_PHP_INI_ENTRY(CAPTCHA_INI_PREFIX ".fake_characters_length", "2", PHP_INI_ALL, OnUpdateChallengeLength, fake_characters_length, zend_captcha_globals, captcha_globals)
     STD_PHP_INI_ENTRY(CAPTCHA_INI_PREFIX ".noise_length", "2", PHP_INI_ALL, OnUpdateLong, noise_length, zend_captcha_globals, captcha_globals)
     STD_PHP_INI_ENTRY(CAPTCHA_INI_PREFIX ".session_prefix", "captcha_", PHP_INI_ALL, OnUpdateStringUnempty, session_prefix, zend_captcha_globals, captcha_globals)
+    STD_PHP_INI_ENTRY(CAPTCHA_INI_PREFIX ".fake_characters_style", "display: none", PHP_INI_ALL, OnUpdateString, fake_characters_style, zend_captcha_globals, captcha_globals)
+    STD_PHP_INI_ENTRY(CAPTCHA_INI_PREFIX ".significant_characters_style", "", PHP_INI_ALL, OnUpdateString, significant_characters_style, zend_captcha_globals, captcha_globals)
 PHP_INI_END()
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_captcha_void, 0, 0, 1)
