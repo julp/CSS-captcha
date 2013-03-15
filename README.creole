@@ -1,10 +1,27 @@
 == Description ==
 
-Run dependency: only PHP's session extension (no gd extension)
+Run dependencies: none except PHP's session extension, which should be enabled everywhere
 
 == Implementation ==
 
 === As a PHP extension ===
+
+==== Installation ====
+
+As any other extension:
+* dynamically:
+** clone the repository into your current directory: {{{ git clone git://github.com/julp/CSS-captcha.git }}}
+** move into the sources directory: {{{ cd CSS-captcha/php-ext }}}
+** compile the extension: {{{ phpize && ./configure && make }}}
+** install the extension: {{{ (sudo) make install }}}
+** activate the extension: {{{ echo 'extension=captcha.so' >> /path/to/your/php.ini # see php --ini }}}
+* statically (PHP sources required):
+** clone the repository into your current directory: {{{ git clone git://github.com/julp/CSS-captcha.git }}}
+** copy the sources of the extension to ext/ directory of PHP sources: {{{ mkdir /path/to/PHP/sources/ext/captcha && cp CSS-captcha/php-ext/* /path/to/PHP/sources/ext/captcha }}}
+** move into PHP sources directory and update configure script with: {{{ cd /path/to/PHP/sources/ && ./buildconf -f }}}
+** configure your future PHP and add --enable-captcha option: {{{ ./configure ... (your options here) --enable-captcha }}}
+** compile PHP: {{{ make }}}
+** finally, install it: {{{ (sudo) make install }}}
 
 ==== INI settings ====
 
@@ -21,7 +38,7 @@ Run dependency: only PHP's session extension (no gd extension)
 * render captcha (HTML and CSS can be obtained separately): {{{ string captcha_render(object $captcha [, integer $what = Captcha::HTML | Captcha::CSS ]) or string Captcha::render([ integer $what = Captcha::HTML | Captcha::CSS ])}}}
 * does user input match current challenge (case insensitive and internal counter for attempts incremented): {{{ boolean captcha_validate(object $captcha, string $input) or boolean Captcha::validate(string $input) }}}
 * renew challenge: {{{ void captcha_renew(object $captcha) or void Captcha::renew() }}}
-* cleanup session (remove session key): {{{ void captcha_cleanup(object $captcha) or void Captcha::cleanup() }}}
+* cleanup current session (remove session key): {{{ void captcha_cleanup(object $captcha) or void Captcha::cleanup() }}}
 * get initial key associated to the captcha: {{{ string captcha_get_key(object $captcha) or string Captcha::get_key() }}}
 * get current challenge: {{{ string captcha_get_challenge(object $captcha) or string Captcha::get_challenge() }}}
 * get the number of attempts: {{{ integer captcha_get_attempts(object $captcha) or integer Captcha::get_attempts() }}}
@@ -51,8 +68,7 @@ if (isset($_POST['captcha'])) {
     if ($captcha->validate($_POST['captcha'])) {
         // pass
     } else if ($captcha->getAttempts() >= MAX_ATTEMPTS) {
-        $captcha->renew();
-        // Too many failures, new token created
+        $captcha->renew(); // Too many failures, new token created
     } else {
         // fail
     }
