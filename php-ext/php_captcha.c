@@ -22,7 +22,11 @@
 zend_class_entry *Captcha_ce_ptr = NULL;
 zend_object_handlers Captcha_handlers;
 
+#ifdef CAPTCHA_WITH_CONFUSABLE
 static const char alphabet[] = "0123456789abcdefghijklmnopqrstuvwxyz";
+#else
+static const char alphabet[] = "23456789abcdefghjkmnpqrstuvwxyz";
+#endif /* CAPTCHA_WITH_CONFUSABLE */
 
 static const char *table_0[] = {
     "2070", "2080", "24EA", "FF10", "01D7CE", "01D7D8", "01D7E2", "01D7EC", "01D7F6"
@@ -529,7 +533,7 @@ static void captcha_fetch_or_create_challenge(Captcha_object* co, int renew TSRM
             const char *challenge;
 
             co->fakes = NULL;
-            challenge_len = CAPTCHA_G(challenge_length);                     \
+            challenge_len = CAPTCHA_G(challenge_length);
             challenge = random_string(challenge_len TSRMLS_CC);
             ALLOC_INIT_ZVAL(co->challenge);
             ZVAL_STRINGL(co->challenge, challenge, challenge_len, 0);
