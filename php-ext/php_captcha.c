@@ -1093,6 +1093,9 @@ static void generate_char(smart_str *ret, Captcha_object *co, long index, char c
     const char *e;
 
     smart_str_append_static(ret, "#captcha span:nth-child(");
+    if (captcha_rand(1 TSRMLS_CC)) {
+        smart_str_append_static(ret, "0n+");
+    }
     smart_str_append_long(ret, index + 1);
     smart_str_append_static(ret, "):after { content: \"");
     if (CAPTCHA_G(noise_length)) {
