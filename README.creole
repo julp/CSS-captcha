@@ -1,27 +1,10 @@
 == Description ==
 
-Run dependencies: none except PHP's session extension, which should be enabled everywhere
+Run dependency: only PHP's session extension (no gd extension)
 
 == Implementation ==
 
 === As a PHP extension ===
-
-==== Installation ====
-
-As any other extension:
-* dynamically:
-** clone the repository into your current directory: {{{ git clone git://github.com/julp/CSS-captcha.git }}}
-** move into the sources directory: {{{ cd CSS-captcha/php-ext }}}
-** compile the extension: {{{ phpize && ./configure && make }}}
-** install the extension: {{{ (sudo) make install }}}
-** activate the extension: {{{ echo 'extension=captcha.so' >> /path/to/your/php.ini # see php --ini }}}
-* statically (PHP sources required):
-** clone the repository into your current directory: {{{ git clone git://github.com/julp/CSS-captcha.git }}}
-** copy the sources of the extension to ext/ directory of PHP sources: {{{ mkdir /path/to/PHP/sources/ext/captcha && cp CSS-captcha/php-ext/* /path/to/PHP/sources/ext/captcha }}}
-** move into PHP sources directory and update configure script with: {{{ cd /path/to/PHP/sources/ && ./buildconf -f }}}
-** configure your future PHP and add --enable-captcha option: {{{ ./configure ... (your options here) --enable-captcha }}}
-** compile PHP: {{{ make }}}
-** finally, install it: {{{ (sudo) make install }}}
 
 ==== INI settings ====
 
@@ -30,7 +13,9 @@ As any other extension:
 * captcha.noise_length (default: 2): integer (0 for none), define the maximum number of noisy characters to add before and after each character composing the challenge. A random number of whitespaces (may be punctuations in the future) will be picked between 0 and this maximum.
 * captcha.session_prefix (default: "captcha_"): string, prefix prepended to session key to minimize risks of overwrites
 * captcha.fake_characters_style (default: "display: none"): string, fragment of CSS code to append to irrelevant characters of the challenge
+* captcha.fake_characters_color (default: "" - none): one constant among CSSCaptcha::[RED|GREEN|BLUE|LIGHT|DARK] to generate a random nuance of the given color
 * captcha.significant_characters_style (default: ""): string, fragment of CSS code to append to significant characters of the challenge
+* captcha.significant_characters_color (default: "" - none): one constant among CSSCaptcha::[RED|GREEN|BLUE|LIGHT|DARK] to generate a random nuance of the given color
 
 ==== Functions ====
 
@@ -38,7 +23,7 @@ As any other extension:
 * render captcha (HTML and CSS can be obtained separately): {{{ string captcha_render(object $captcha [, integer $what = Captcha::HTML | Captcha::CSS ]) or string Captcha::render([ integer $what = Captcha::HTML | Captcha::CSS ])}}}
 * does user input match current challenge (case insensitive and internal counter for attempts incremented): {{{ boolean captcha_validate(object $captcha, string $input) or boolean Captcha::validate(string $input) }}}
 * renew challenge: {{{ void captcha_renew(object $captcha) or void Captcha::renew() }}}
-* cleanup current session (remove session key): {{{ void captcha_cleanup(object $captcha) or void Captcha::cleanup() }}}
+* cleanup session (remove session key): {{{ void captcha_cleanup(object $captcha) or void Captcha::cleanup() }}}
 * get initial key associated to the captcha: {{{ string captcha_get_key(object $captcha) or string Captcha::get_key() }}}
 * get current challenge: {{{ string captcha_get_challenge(object $captcha) or string Captcha::get_challenge() }}}
 * get the number of attempts: {{{ integer captcha_get_attempts(object $captcha) or integer Captcha::get_attempts() }}}
@@ -47,8 +32,9 @@ As any other extension:
 
 {{{
 <?php
-ini_set('captcha.fake_characters_style', 'color: red');
-ini_set('captcha.significant_characters_style', 'color: blue');
+ini_set('captcha.fake_characters_style', '');
+ini_set('captcha.fake_characters_color', CSSCaptcha::LIGHT);
+ini_set('captcha.significant_characters_color', CSSCaptcha::BLUE);
 
 header('Content-Type: text/html; charset=utf-8');
 session_start();
@@ -66,11 +52,13 @@ define('KEY', pathinfo(__FILE__, PATHINFO_FILENAME));
 if (isset($_POST['captcha'])) {
     $captcha = new CSSCaptcha(KEY);
     if ($captcha->validate($_POST['captcha'])) {
-        // pass
+        $captcha->renew();
+        echo '<p>You pass. New token created.</p>';
     } else if ($captcha->getAttempts() >= MAX_ATTEMPTS) {
-        $captcha->renew(); // Too many failures, new token created
+        $captcha->renew();
+        echo '<p>Too many failures, new token created.</p>';
     } else {
-        // fail
+        echo '<p>You fail.</p>';
     }
 } else  {
     $captcha = new CSSCaptcha(KEY);
@@ -81,11 +69,33 @@ if (isset($_POST['captcha'])) {
             <div style="clear: both;">
                 Captcha : <input type="text" name="captcha"/> (enter only blue characters)
             </div>
+            <p>Expect: <?php var_dump($captcha->getChallenge()); ?></p>
+            <p>Attempts: <?php var_dump($captcha->getAttempts()); ?></p>
             <input type="submit" value="Envoyer"/>
         </form>
     </body>
 </html>
 }}}
+
+Generated HTML/CSS code looks like this:
+{{{
+<style type="text/css">
+#captcha span:nth-child(0n+4):after { content: "\01D7E7\2005"; color: #FDFCFD;  }
+#captcha span:nth-child(5):after { content: "\1E64\0020\00A0"; color: #F3EEE2;  }
+#captcha span:nth-child(0n+1):after { content: "\01D7E7\2003"; color: #0D4DFB;  }
+#captcha span:nth-child(0n+6):after { content: "\2028\2467\2009"; color: #0777F7;  }
+#captcha span:nth-child(0n+7):after { content: "\2000\01D66B"; color: #1A37DA;  }
+#captcha span:nth-child(0n+9):after { content: "\01D595\000D\2008"; color: #123EDE;  }
+#captcha span:nth-child(10):after { content: "\2029\0009\01D7D2\2000"; color: #024BCA;  }
+#captcha span:nth-child(2):after { content: "\200A\2003\01D7E7"; color: #0B1CDA;  }
+#captcha span:nth-child(0n+3):after { content: "\2007\000C\2077"; color: #4351E9;  }
+#captcha span:nth-child(8):after { content: "\180E\01D4F4\0020"; color: #2050FD;  }
+</style>
+<div id="captcha">
+    <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+</div>
+}}}
+(for the token 5578vkp4 with 2 fake characters - 557**5s**8vkp4)
 
 === Plain PHP ===
 
