@@ -29,6 +29,8 @@ ZEND_BEGIN_MODULE_GLOBALS(captcha)
     char *session_prefix;
     char *fake_characters_style;
     char *significant_characters_style;
+    long fake_characters_color;
+    long significant_characters_color;
 ZEND_END_MODULE_GLOBALS(captcha)
 
 # ifdef ZTS

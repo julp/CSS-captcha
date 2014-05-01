@@ -22,6 +22,7 @@
 
 #define CAPTCHA_UNICODE_VERSION (CAPTCHA_UNICODE_MAJOR * 1000 + CAPTCHA_UNICODE_MINOR * 100 + CAPTCHA_UNICODE_PATCH)
 
+#include <stdint.h>
 #include "php.h"
 #include "php_ini.h"
 #include "php_captcha.h"
@@ -38,6 +39,26 @@
 
 #define CAPTCHA_CSS  (1 << 0)
 #define CAPTCHA_HTML (1 << 1)
+
+struct captcha_colordef_t {
+    // [0;360[
+    uint16_t hmin;
+    uint16_t hmax;
+    // [0;100]
+    uint8_t smin;
+    uint8_t smax;
+    // [0;100]
+    uint8_t lmin;
+    uint8_t lmax;
+    const char *name;
+} static colordefs[] = {
+    { 0, 0, 0, 0, 0, 0, "NONE" }, /* Dummy value to disable color feature */
+    { 0, 30, 75, 100, 40, 60, "RED" },
+    { 210, 240, 75, 100, 40, 60, "BLUE" },
+    { 90, 120, 75, 100, 40, 60, "GREEN" },
+    { 0, 359, 0, 50, 92, 100, "LIGHT" },
+    { 0, 359, 0, 100, 0, 6, "DARK" }
+};
 
 zend_class_entry *Captcha_ce_ptr = NULL;
 zend_object_handlers Captcha_handlers;
@@ -842,6 +863,16 @@ static long captcha_rand(long max TSRMLS_DC)
     return rnd_idx;
 }
 
+static long captcha_rand_range(long min, long max TSRMLS_DC)
+{
+    long rnd_idx;
+
+    rnd_idx = php_rand(TSRMLS_C);
+    RAND_RANGE(rnd_idx, min, max, PHP_RAND_MAX);
+
+    return rnd_idx;
+}
+
 static char *random_string(long length TSRMLS_DC)
 {
     long i;
@@ -980,6 +1011,82 @@ PHP_METHOD(Captcha, __construct)
 #define char2int(/*char*/ c) \
     ((c & 0x40) ? (10 + c - 0x61) : (c - 0x30))
 
+static double hue_to_rgb(double m1, double m2, uint16_t h)
+{
+    if (h < 0) {
+        h += 360;
+    }
+    if (h > 360) {
+        h -= 360;
+    }
+    if (h < 60)  {
+        return (m1 + (m2 - m1) * (h / 60.0)) * 255.5;
+    }
+    if (h < 180) {
+        return (m2 * 255.5);
+    }
+    if (h < 240) {
+        return (m1 + (m2 - m1) * ((240 - h) / 60.0)) * 255.5;
+    }
+    return m1 * 255.5;
+}
+
+static void hsl_to_rgb(uint16_t _h, uint8_t _s, uint8_t _l, uint8_t *r, uint8_t *g, uint8_t *b)
+{
+    double h, s, l, m1, m2;
+
+    if (_l == 0) {
+        *r = *g = *b = 0;
+    } else {
+        h = _h / 360.0;
+        s = _s / 100.0;
+        l = _l / 100.0;
+        if (l <= 0.5) {
+            m2 = l * (s + 1);
+        } else {
+            m2 = l + s - l * s;
+        }
+        m1 = l * 2 - m2;
+        *r = hue_to_rgb(m1, m2, _h + 120);
+        *g = hue_to_rgb(m1, m2, _h);
+        *b = hue_to_rgb(m1, m2, _h - 120);
+    }
+}
+
+static void set_color(smart_str *ret, int significant TSRMLS_DC)
+{
+    uint16_t h;
+    uint8_t s, l, r, g, b;
+    struct captcha_colordef_t *c;
+    static const char hexdigits[] = "0123456789ABCDEF";
+
+    if (significant) {
+        if (CAPTCHA_G(significant_characters_color)) {
+            c = &colordefs[CAPTCHA_G(significant_characters_color)];
+        } else {
+            return;
+        }
+    } else {
+        if (CAPTCHA_G(fake_characters_color)) {
+            c = &colordefs[CAPTCHA_G(fake_characters_color)];
+        } else {
+            return;
+        }
+    }
+    h = captcha_rand_range(c->hmin, c->hmax TSRMLS_CC);
+    s = captcha_rand_range(c->smin, c->smax TSRMLS_CC);
+    l = captcha_rand_range(c->lmin, c->lmax TSRMLS_CC);
+    hsl_to_rgb(h, s, l, &r, &g, &b);
+    smart_str_append_static(ret, "color: #");
+    smart_str_appendc(ret, hexdigits[r / 16]);
+    smart_str_appendc(ret, hexdigits[r % 16]);
+    smart_str_appendc(ret, hexdigits[g / 16]);
+    smart_str_appendc(ret, hexdigits[g % 16]);
+    smart_str_appendc(ret, hexdigits[b / 16]);
+    smart_str_appendc(ret, hexdigits[b % 16]);
+    smart_str_append_static(ret, "; ");
+}
+
 static void generate_char(smart_str *ret, Captcha_object *co, long index, char c, int significant TSRMLS_DC)
 {
     long noise, p;
@@ -1015,6 +1122,7 @@ static void generate_char(smart_str *ret, Captcha_object *co, long index, char c
         }
     }
     smart_str_append_static(ret, "\"; ");
+    set_color(ret, significant TSRMLS_CC);
     if (significant) {
         smart_str_appends(ret, CAPTCHA_G(significant_characters_style));
     } else {
@@ -1227,7 +1335,37 @@ ZEND_API ZEND_INI_MH(OnUpdateChallengeLength)
         return FAILURE;
     }
 
-    p = (long *) (base+(size_t) mh_arg1);
+    p = (long *) (base + (size_t) mh_arg1);
+    *p = tmp;
+
+    return SUCCESS;
+}
+
+ZEND_API ZEND_INI_MH(OnUpdateColor)
+{
+    long *p, tmp;
+#ifndef ZTS
+    char *base = (char *) mh_arg2;
+#else
+    char *base;
+
+    base = (char *) ts_resource(*((int *) mh_arg2));
+#endif /* !ZTS */
+
+    tmp = zend_atol(new_value, new_value_length);
+    if (tmp < 0 || tmp > ARRAY_SIZE(colordefs)) {
+        int err_type;
+
+        if (ZEND_INI_STAGE_RUNTIME == stage) {
+            err_type = E_WARNING;
+        } else {
+            err_type = E_ERROR;
+        }
+        php_error_docref(NULL TSRMLS_CC, err_type, "Invalid color value: %ld", tmp);
+        return FAILURE;
+    }
+
+    p = (long *) (base + (size_t) mh_arg1);
     *p = tmp;
 
     return SUCCESS;
@@ -1240,6 +1378,8 @@ PHP_INI_BEGIN()
     STD_PHP_INI_ENTRY(CAPTCHA_INI_PREFIX ".session_prefix", "captcha_", PHP_INI_ALL, OnUpdateStringUnempty, session_prefix, zend_captcha_globals, captcha_globals)
     STD_PHP_INI_ENTRY(CAPTCHA_INI_PREFIX ".fake_characters_style", "display: none", PHP_INI_ALL, OnUpdateString, fake_characters_style, zend_captcha_globals, captcha_globals)
     STD_PHP_INI_ENTRY(CAPTCHA_INI_PREFIX ".significant_characters_style", "", PHP_INI_ALL, OnUpdateString, significant_characters_style, zend_captcha_globals, captcha_globals)
+    STD_PHP_INI_ENTRY(CAPTCHA_INI_PREFIX ".fake_characters_color", "", PHP_INI_ALL, OnUpdateColor, fake_characters_color, zend_captcha_globals, captcha_globals)
+    STD_PHP_INI_ENTRY(CAPTCHA_INI_PREFIX ".significant_characters_color", "", PHP_INI_ALL, OnUpdateColor, significant_characters_color, zend_captcha_globals, captcha_globals)
 PHP_INI_END()
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_captcha_void, 0, 0, 1)
@@ -1335,6 +1475,7 @@ static zend_object_value Captcha_object_create(zend_class_entry *ce TSRMLS_DC)
 
 static PHP_MINIT_FUNCTION(captcha)
 {
+    size_t i;
     zend_class_entry ce;
 
     REGISTER_INI_ENTRIES();
@@ -1346,6 +1487,9 @@ static PHP_MINIT_FUNCTION(captcha)
 
     zend_declare_class_constant_long(Captcha_ce_ptr, "CSS",  STR_LEN("CSS"),  CAPTCHA_CSS TSRMLS_CC);
     zend_declare_class_constant_long(Captcha_ce_ptr, "HTML", STR_LEN("HTML"), CAPTCHA_HTML TSRMLS_CC);
+    for (i = 0; i < ARRAY_SIZE(colordefs); i++) {
+        zend_declare_class_constant_long(Captcha_ce_ptr, colordefs[i].name, strlen(colordefs[i].name), i TSRMLS_CC);
+    }
 
     return SUCCESS;
 }

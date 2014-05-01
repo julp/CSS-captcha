@@ -1,6 +1,7 @@
 <?php
-ini_set('captcha.fake_characters_style', 'color: red');
-ini_set('captcha.significant_characters_style', 'color: blue');
+ini_set('captcha.fake_characters_style', '');
+ini_set('captcha.fake_characters_color', CSSCaptcha::LIGHT);
+ini_set('captcha.significant_characters_color', CSSCaptcha::BLUE);
 
 header('Content-Type: text/html; charset=utf-8');
 session_start();
