@@ -1143,7 +1143,7 @@ PHP_FUNCTION(captcha_render)
     Captcha_object *co = NULL;
     long total_len, /*noise = 0,*/ what = CAPTCHA_CSS | CAPTCHA_HTML;
 
-    if (FAILURE == zend_parse_method_parameters(ZEND_NUM_ARGS() TSRMLS_CC, getThis(), "O", &object, Captcha_ce_ptr, &what)) {
+    if (FAILURE == zend_parse_method_parameters(ZEND_NUM_ARGS() TSRMLS_CC, getThis(), "O|l", &object, Captcha_ce_ptr, &what)) {
         RETURN_FALSE;
     }
     CAPTCHA_FETCH_OBJ(co, object);
@@ -1157,7 +1157,9 @@ PHP_FUNCTION(captcha_render)
         long i;
         unsigned char index[ARRAY_SIZE(shuffling)], map[ARRAY_SIZE(shuffling)];
 
-        smart_str_append_static(&ret, "<style type=\"text/css\">\n");
+        if (what & CAPTCHA_HTML) {
+            smart_str_append_static(&ret, "<style type=\"text/css\">\n");
+        }
         memcpy(index, shuffling, total_len);
         php_string_shuffle(index, total_len TSRMLS_CC);
         if (NULL != co->fakes) {
@@ -1191,7 +1193,9 @@ PHP_FUNCTION(captcha_render)
                 generate_char(&ret, co, index[i], Z_STRVAL_P(co->challenge)[map[index[i]]], 1 TSRMLS_CC);
             }
         }
-        smart_str_append_static(&ret, "</style>\n");
+        if (what & CAPTCHA_HTML) {
+            smart_str_append_static(&ret, "</style>\n");
+        }
     }
 
     if (what & CAPTCHA_HTML) {
