@@ -103,11 +103,12 @@ Generated HTML/CSS code looks like this:
 
 | "Feature" | PHP extension | Plain PHP | Note |
 | --------- | ------------- | --------- | ---- |
-| Confusables can be en/disabled | at compile time | no (enabled) | - |
-| Choice in Unicode version | at compile time | no (based on 6.1.0?) | - |
+| Confusables can be en/disabled | at compile time | enabled without source modification | - |
+| Choice in Unicode version | at compile time | no (based on 6.1.0? or generate your own tables) | - |
 | Random direction (left/right, through float) | not implemented | implemented (for testing, can be en/disabled) | - |
 | Random nuance of a given color (`captcha.*_color`) | implemented (for testing, can be en/disabled) | not implemented | - |
 | Random prefix "0n+" in nth-child | implemented | not implemented | - |
 | Fake characters | implemented | implemented | 0 to disable |
 | Noisy characters (spaces for now) | implemented | implemented | 0 to disable |
-| Way to configure it | ini settings (PHP_INI_ALL) | class constants or properties (for now) |
+| Way to configure it | ini settings (PHP_INI_ALL) | class constants or properties | ugly but convenient for now |
+| Way to use it | procedural or OOP | procedural or OOP | - |

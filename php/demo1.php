@@ -1,8 +1,7 @@
 <?php
 header('Content-Type: text/html; charset=utf-8');
 session_start();
-include('CSSCaptcha.php');
-use Julp\CSSCaptcha;
+require('CSSCaptcha.php');
 ?>
 <!DOCTYPE html>
 <html>
@@ -11,13 +10,17 @@ use Julp\CSSCaptcha;
     </head>
     <body>
 <?php
+define('MAX_ATTEMPTS', 10);
 define('KEY', pathinfo(__FILE__, PATHINFO_FILENAME));
 
 if (isset($_POST['captcha'])) {
     $captcha = new CSSCaptcha(KEY);
     if ($captcha->validate($_POST['captcha'])) {
         $captcha->renew();
-        echo '<p>You pass. New token created.</p>';
+        echo '<p>You pass, new token created.</p>';
+    } else if ($captcha->getAttempts() >= MAX_ATTEMPTS) {
+        $captcha->renew();
+        echo '<p>Too many failures, new token created.</p>';
     } else {
         echo '<p>You fail.</p>';
     }
@@ -31,6 +34,7 @@ if (isset($_POST['captcha'])) {
                 Captcha : <input type="text" name="captcha"/> (only lower cased letter and digit)
             </div>
             <p>Expect: <?php var_dump($captcha->getChallenge()); ?></p>
+            <p>Attempts: <?php echo $captcha->getAttempts(), ' / ', MAX_ATTEMPTS; ?></p>
             <input type="submit" value="Envoyer"/>
         </form>
     </body>

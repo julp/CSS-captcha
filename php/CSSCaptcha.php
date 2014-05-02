@@ -1,6 +1,4 @@
 <?php
-namespace Julp;
-
 class CSSCaptcha {
 
     const CSS  = 0x01;
@@ -350,6 +348,7 @@ class CSSCaptcha {
 
     protected $_key;
     protected $_challenge;
+    protected $_attempts = 0;
 
     protected function generateChallenge()
     {
@@ -380,21 +379,32 @@ class CSSCaptcha {
         }
     }
 
-    public function __construct($key, $challenge = NULL)
+    private static function checkActiveSession() {
+        if (function_exists('session_status') && PHP_SESSION_ACTIVE != session_status()) {
+            throw new Exception('CSSCaptcha implies an active session');
+        }
+    }
+
+    public function __construct($key)
     {
         $this->_key = $key;
-        if (is_null($challenge)) {
-            if (array_key_exists(self::SESSION_PREFIX . $key, $_SESSION)) {
-                if (!is_string($_SESSION[self::SESSION_PREFIX . $key]) || !$_SESSION[self::SESSION_PREFIX . $key]) {
-                    throw new /*\*/Exception("Unexistant key or invalid challenge");
-                } else {
-                    $this->_challenge = $_SESSION[self::SESSION_PREFIX . $this->_key];
-                }
-            } else {
+        self::checkActiveSession();
+        if (array_key_exists(self::SESSION_PREFIX . $key, $_SESSION)) {
+            if (
+                   !is_array($_SESSION[self::SESSION_PREFIX . $key])
+                || !array_key_exists('attempts', $_SESSION[self::SESSION_PREFIX . $key])
+                || !array_key_exists('challenge', $_SESSION[self::SESSION_PREFIX . $key])
+                || !is_int($_SESSION[self::SESSION_PREFIX . $key]['attempts'])
+                || !is_string($_SESSION[self::SESSION_PREFIX . $key]['challenge'])
+                || !$_SESSION[self::SESSION_PREFIX . $key]['challenge']
+            ) {
                 $this->renew();
+            } else {
+                $this->_attempts = &$_SESSION[self::SESSION_PREFIX . $this->_key]['attempts'];
+                $this->_challenge = &$_SESSION[self::SESSION_PREFIX . $this->_key]['challenge'];
             }
         } else {
-            $this->_challenge = $challenge;
+            $this->renew();
         }
     }
 
@@ -405,7 +415,9 @@ class CSSCaptcha {
         $rtl = ($what == self::CSS | self::HTML) && !self::ONLY_LTR && rand(0, 1); # TODO: remove $what == self::CSS | self::HTML test, implies to move "$rtl" to a higher "scope" (session and/or attribute)
 
         if ($what & self::CSS) {
-            $ret .= '<style type="text/css">';
+            if ($what & self::HTML) {
+                $ret .= '<style type="text/css">';
+            }
             if ($rtl) {
                 $ret .= '#captcha { float: left; /*position: absolute; left: 0;*/ height: auto; overflow: hidden; zoom: 1; }' . "\n";
                 $ret .= '#captcha span { float: right; }' . "\n";
@@ -425,7 +437,9 @@ class CSSCaptcha {
                 }
                 $ret .= '#captcha span:nth-child(' . ($i + 1) . '):after { content: "' . self::generateIgnorables() . '\\' . self::$_tables[$p][array_rand(self::$_tables[$p])] . self::generateIgnorables() . '"; ' /*. self::$normal_character_style*/ . ' }' . "\n";
             }
-            $ret .= '</style>';
+            if ($what & self::HTML) {
+                $ret .= '</style>';
+            }
         }
 
         if ($what & self::HTML) {
@@ -437,7 +451,7 @@ class CSSCaptcha {
 
     public function validate($user_input)
     {
-        // ++attempts;
+        ++$this->_attempts;
         return str_replace(' ', '', $this->_challenge) === $user_input;
     }
 
@@ -448,8 +462,18 @@ class CSSCaptcha {
 
     public function renew()
     {
-        // attempts = 0;
-        $_SESSION[self::SESSION_PREFIX . $this->_key] = $this->_challenge = $this->generateChallenge();
+        # We can't just do:
+        /*
+        $this->_attempts = 0;
+        $this->_challenge = $this->generateChallenge();
+        */
+        # $_SESSION[self::SESSION_PREFIX . $this->_key] may be not yet "initialized"
+        $_SESSION[self::SESSION_PREFIX . $this->_key] = array(
+            'attempts'  => 0,
+            'challenge' => $this->generateChallenge(),
+        );
+        $this->_attempts = &$_SESSION[self::SESSION_PREFIX . $this->_key]['attempts'];
+        $this->_challenge = &$_SESSION[self::SESSION_PREFIX . $this->_key]['challenge'];
     }
 
     public function getKey()
@@ -461,4 +485,49 @@ class CSSCaptcha {
     {
         return str_replace(' ', '', $this->_challenge);
     }
+
+    public function getAttempts()
+    {
+        return $this->_attempts;
+    }
+}
+
+function captcha_create($key)
+{
+    return new CSSCaptcha($key);
+}
+
+function captcha_render(CSSCaptcha $captcha, $what = 0x11/*CSSCaptcha::CSS | CSSCaptcha::HTML*/)
+{
+    return $captcha->render($what);
+}
+
+function captcha_validate(CSSCaptcha $captcha, $user_input)
+{
+    return $captcha->validate($user_input);
+}
+
+function captcha_renew(CSSCaptcha $captcha)
+{
+    $captcha->renew();
+}
+
+function captcha_cleanup(CSSCaptcha $captcha)
+{
+    $captcha->cleanup();
+}
+
+function captcha_get_key(CSSCaptcha $captcha)
+{
+    return $captcha->getKey();
+}
+
+function captcha_get_challenge(CSSCaptcha $captcha)
+{
+    return $captcha->getChallenge();
+}
+
+function captcha_get_attempts(CSSCaptcha $captcha)
+{
+    return $captcha->getAttempts();
 }
