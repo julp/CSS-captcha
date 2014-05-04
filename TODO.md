@@ -21,6 +21,7 @@ CSS obfuscation:
 * [ ] random comments (/* ... */)
 
 php-plain:
+* [ ] missing checks on \*\_length attributes
 * [ ] fake characters are not kept
-* [ ] external serialized tables
+* [ ] external files for serialized tables
 * [ ] colors

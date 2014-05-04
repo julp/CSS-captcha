@@ -113,8 +113,8 @@ Here for the token 8z2cx6yw with 2 fake characters - 8**w**z2**u**cx6yw.
 | --------- | ------------- | --------- | ---- |
 | Confusables can be en/disabled | at compile time | enabled without source modification | - |
 | Choice in Unicode version | at compile time | no (based on 6.1.0 or generate your own tables) | - |
-| Random direction (left/right, through float) | not implemented | implemented (for testing, can be en/disabled) | - |
-| Random nuance of a given color (`captcha.*_color`) | implemented (for testing, can be en/disabled) | not implemented | - |
+| Random direction (left/right, through float) | not implemented | implemented (for testing, can be en/disabled through `CSSCaptcha::ATTR_ONLY_LTR`) | - |
+| Random nuance of a given color (`CSSCaptcha::ATTR_*_COLOR`) | implemented (for testing, can be en/disabled) | not implemented | - |
 | Random prefix "0n+" in nth-child | implemented | not implemented | - |
 | Fake characters | implemented | implemented | 0 to disable |
 | Noisy characters (spaces for now) | implemented | implemented | 0 to disable |

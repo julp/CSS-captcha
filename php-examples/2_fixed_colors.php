@@ -21,8 +21,8 @@ $options = array(
     CSSCaptcha::ATTR_SIGNIFICANT_CHARACTERS_STYLE => 'color: blue;',
 );
 
+$captcha = new CSSCaptcha(KEY, $options);
 if (isset($_POST['captcha'])) {
-    $captcha = new CSSCaptcha(KEY, $options);
     if ($captcha->validate($_POST['captcha'])) {
         $captcha->renew();
         echo '<p>You pass, new token created.</p>';
@@ -32,18 +32,24 @@ if (isset($_POST['captcha'])) {
     } else {
         echo '<p>You fail.</p>';
     }
-} else /*if (!isset($_SESSION['']))*/ {
-    $captcha = new CSSCaptcha(KEY, $options);
 }
 ?>
         <form method="post" action="">
-            <?php echo $captcha->render(); ?>
-            <div style="clear: both;">
-                Captcha : <input type="text" name="captcha"/> (only lower cased letter and digit)
-            </div>
-            <p>Expect: <?php var_dump($captcha->getChallenge()); ?></p>
-            <p>Attempts: <?php echo $captcha->getAttempts(), ' / ', MAX_ATTEMPTS; ?></p>
-            <input type="submit" value="Envoyer"/>
+            <fieldset>
+                <legend>Security code</legend>
+                <?php echo $captcha->render(); ?>
+                <div style="clear: both;">
+                    <p>Retype (only) blue letters in the field below:</p>
+                    <input type="text" name="captcha"/>
+                    <p><small>(only lower cased letter and digit)</small></p>
+                </div>
+            </fieldset>
+            <fieldset>
+                <legend>Debug: internal states</legend>
+                <p>Expect: <?php var_dump($captcha->getChallenge()); ?></p>
+                <p>Attempts: <?php echo $captcha->getAttempts(), ' / ', MAX_ATTEMPTS; ?></p>
+            </fieldset>
+            <input type="submit" value="Send"/>
         </form>
     </body>
 </html>
