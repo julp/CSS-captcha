@@ -37,8 +37,64 @@
 #define CAPTCHA_CLASS_NAME "CSSCaptcha"
 #define CAPTCHA_INI_PREFIX "captcha"
 
-#define CAPTCHA_CSS  (1 << 0)
-#define CAPTCHA_HTML (1 << 1)
+#define CAPTCHA_RENDER_CSS  (1 << 0)
+#define CAPTCHA_RENDER_HTML (1 << 1)
+
+#define CAPTCHA_PREFIX(x) \
+    CAPTCHA_##x
+
+#define XCAPTCHA_ATTR_PREFIX \
+    ATTR_
+
+#define CAPTCHA_ATTR_PREFIX(x) \
+    CAPTCHA_PREFIX(XCAPTCHA_ATTR_PREFIX ## x)
+//     CAPTCHA_ ## XCAPTCHA_ATTR_PREFIX ## x
+
+#define XCAPTCHA_COLOR_PREFIX \
+    COLOR_
+
+#define CAPTCHA_COLOR_PREFIX(x) \
+    CAPTCHA_PREFIX(XCAPTCHA_COLOR_PREFIX ## x)
+
+#define CAPTCHA_ATTR(member) \
+    co->member
+
+enum {
+#define LONG_CAPTCHA_ATTRIBUTE(member, name, cb) \
+    CAPTCHA_ATTR_PREFIX(name),
+#define STRING_CAPTCHA_ATTRIBUTE(member, name, cb) \
+    CAPTCHA_ATTR_PREFIX(name),
+#include "captcha_attributes.h"
+#undef LONG_CAPTCHA_ATTRIBUTE
+#undef STRING_CAPTCHA_ATTRIBUTE
+    CAPTCHA_ATTR_PREFIX(COUNT)
+};
+
+static int check_color_attribute(zval * TSRMLS_DC);
+static int check_challenge_length_attribute(zval * TSRMLS_DC);
+static int check_zero_or_positive_attribute(zval * TSRMLS_DC);
+static int check_fake_characters_length_attribute(zval * TSRMLS_DC);
+
+struct captcha_attribute_t {
+    size_t offset;
+    int (*cb)(zval * TSRMLS_DC);
+} static attributes[] = {
+#define LONG_CAPTCHA_ATTRIBUTE(member, name, cb) \
+    { offsetof(Captcha_object, member), cb },
+#define STRING_CAPTCHA_ATTRIBUTE(member, name, cb) \
+    { offsetof(Captcha_object, member), cb },
+#include "captcha_attributes.h"
+#undef LONG_CAPTCHA_ATTRIBUTE
+#undef STRING_CAPTCHA_ATTRIBUTE
+};
+
+enum {
+#define CAPTCHA_COLOR(hminx, hmax, smin, smax, lmin, lmax, name) \
+    CAPTCHA_COLOR_PREFIX(name),
+#include "captcha_colors.h"
+#undef CAPTCHA_COLOR
+    CAPTCHA_COLOR_PREFIX(COUNT)
+};
 
 struct captcha_colordef_t {
     // [0;360[
@@ -50,14 +106,11 @@ struct captcha_colordef_t {
     // [0;100]
     uint8_t lmin;
     uint8_t lmax;
-    const char *name;
 } static colordefs[] = {
-    { 0, 0, 0, 0, 0, 0, "NONE" }, /* Dummy value to disable color feature */
-    { 0, 30, 75, 100, 40, 60, "RED" },
-    { 210, 240, 75, 100, 40, 60, "BLUE" },
-    { 90, 120, 75, 100, 40, 60, "GREEN" },
-    { 0, 359, 0, 50, 92, 100, "LIGHT" },
-    { 0, 359, 0, 100, 0, 6, "DARK" }
+#define CAPTCHA_COLOR(hminx, hmax, smin, smax, lmin, lmax, name) \
+    { hminx, hmax, smin, smax, lmin, lmax },
+#include "captcha_colors.h"
+#undef CAPTCHA_COLOR
 };
 
 zend_class_entry *Captcha_ce_ptr = NULL;
@@ -817,16 +870,14 @@ static const char shuffling[] = {
 
 #define COMPLETE_SESSION_KEY(/*Captcha_object **/ co, /*char **/ name, /*long*/ name_len) \
     do {                                                                                  \
-        name_len = strlen(CAPTCHA_G(session_prefix)) + co->key_len;                       \
+        name_len = strlen(CAPTCHA_ATTR(session_prefix)) + co->key_len;                    \
         name = emalloc(name_len + 1);                                                     \
-        strcpy(name, CAPTCHA_G(session_prefix));                                          \
+        strcpy(name, CAPTCHA_ATTR(session_prefix));                                       \
         strcat(name, co->key);                                                            \
     } while (0);
 
 #define SESSION_IS_ACTIVE() \
     (PS(http_session_vars) && IS_ARRAY == PS(http_session_vars)->type)
-
-ZEND_DECLARE_MODULE_GLOBALS(captcha)
 
 static void php_string_shuffle(char *str, long len TSRMLS_DC)
 {
@@ -887,6 +938,24 @@ static char *random_string(long length TSRMLS_DC)
     return k;
 }
 
+static int is_subset_of(zval *string, const char *set, size_t set_len)
+{
+    size_t i;
+    uint8_t characters[256];
+
+    memset(characters, 0, ARRAY_SIZE(characters));
+    for (i = 0; i < set_len; i++) {
+        characters[(unsigned char) set[i]] = 1;
+    }
+    for (i = 0; i < Z_STRLEN_P(string); i++) {
+        if (!characters[(unsigned char) Z_STRVAL_P(string)[i]]) {
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
 static void captcha_fetch_or_create_challenge(Captcha_object* co, int renew TSRMLS_DC)
 {
     char *name;
@@ -901,6 +970,7 @@ static void captcha_fetch_or_create_challenge(Captcha_object* co, int renew TSRM
             && IS_ARRAY == Z_TYPE_PP(zcontainer)
             && SUCCESS == zend_hash_find(Z_ARRVAL_PP(zcontainer), "challenge", sizeof("challenge"), (void **) &zchallenge)
             && IS_STRING == Z_TYPE_PP(zchallenge)
+            && is_subset_of(*zchallenge, alphabet, STR_LEN(alphabet))
             && SUCCESS == zend_hash_find(Z_ARRVAL_PP(zcontainer), "attempts", sizeof("attempts"), (void **) &zattemps)
             && IS_LONG == Z_TYPE_PP(zattemps)
         ) {
@@ -920,7 +990,7 @@ static void captcha_fetch_or_create_challenge(Captcha_object* co, int renew TSRM
             const char *challenge;
 
             co->fakes = NULL;
-            challenge_len = CAPTCHA_G(challenge_length);
+            challenge_len = CAPTCHA_ATTR(challenge_length);
             challenge = random_string(challenge_len TSRMLS_CC);
             ALLOC_INIT_ZVAL(co->challenge);
             ZVAL_STRINGL(co->challenge, challenge, challenge_len, 0);
@@ -932,7 +1002,7 @@ static void captcha_fetch_or_create_challenge(Captcha_object* co, int renew TSRM
             array_init(co->container);
             add_assoc_zval_ex(co->container, "attempts", sizeof("attempts"), co->attempts);
             add_assoc_zval_ex(co->container, "challenge", sizeof("challenge"), co->challenge);
-            if (CAPTCHA_G(fake_characters_length)) {
+            if (CAPTCHA_ATTR(fake_characters_length)) {
                 int i;
                 char index[MAX_CHALLENGE_LENGTH];
 
@@ -941,7 +1011,7 @@ static void captcha_fetch_or_create_challenge(Captcha_object* co, int renew TSRM
 
                 ALLOC_INIT_ZVAL(co->fakes);
                 array_init(co->fakes);
-                for (i = 0; i < CAPTCHA_G(fake_characters_length); i++) {
+                for (i = 0; i < CAPTCHA_ATTR(fake_characters_length); i++) {
                     add_index_stringl(co->fakes, index[i], alphabet + captcha_rand(STR_LEN(alphabet) - 1 TSRMLS_CC), 1, 1);
                 }
                 add_assoc_zval_ex(co->container, "fakes", sizeof("fakes"), co->fakes);
@@ -950,25 +1020,126 @@ static void captcha_fetch_or_create_challenge(Captcha_object* co, int renew TSRM
         }
         efree(name);
     } else {
-        zend_throw_exception_ex(NULL, 0 TSRMLS_CC, "CSSCaptcha implies an active session");
+        zend_throw_exception_ex(NULL, 0 TSRMLS_CC, CAPTCHA_CLASS_NAME " implies an active session");
     }
+}
+
+static int check_color_attribute(zval *value TSRMLS_DC)
+{
+    // we can assume that value is a "long" due to anterior convert_to_long
+    if (Z_LVAL_P(value) < 0 || Z_LVAL_P(value) >= CAPTCHA_ATTR_PREFIX(COUNT)) {
+        php_error_docref(NULL TSRMLS_CC, E_WARNING, "Invalid color value: %ld", Z_LVAL_P(value));
+        return 0;
+    } else {
+        return 1;
+    }
+}
+
+static int check_challenge_length_attribute(zval *value TSRMLS_DC)
+{
+    // we can assume that value is a "long" due to anterior convert_to_long
+    if (Z_LVAL_P(value) <= 0 || Z_LVAL_P(value) >= MAX_CHALLENGE_LENGTH) {
+        php_error_docref(NULL TSRMLS_CC, E_WARNING, "Challenge length must be in the range ]0;%lu]", MAX_CHALLENGE_LENGTH);
+        return 0;
+    } else {
+        return 1;
+    }
+}
+
+static int check_fake_characters_length_attribute(zval *value TSRMLS_DC)
+{
+    // we can assume that value is a "long" due to anterior convert_to_long
+    if (Z_LVAL_P(value) < 0 || Z_LVAL_P(value) >= MAX_CHALLENGE_LENGTH) {
+        php_error_docref(NULL TSRMLS_CC, E_WARNING, "Fake characters length must be in the range [0;%lu]", MAX_CHALLENGE_LENGTH);
+        return 0;
+    } else {
+        return 1;
+    }
+}
+
+static int check_zero_or_positive_attribute(zval *value TSRMLS_DC)
+{
+    // we can assume that value is a "long" due to anterior convert_to_long
+    if (Z_LVAL_P(value) < 0) {
+        php_error_docref(NULL TSRMLS_CC, E_WARNING, "Noise length can't be negative");
+        return 0;
+    } else {
+        return 1;
+    }
+}
+
+static long captcha_set_attribute(Captcha_object* co, ulong attribute, zval **value TSRMLS_DC)
+{
+    switch (attribute) {
+#define LONG_CAPTCHA_ATTRIBUTE(member, name, cb) \
+        case CAPTCHA_ATTR_PREFIX(name):
+#define STRING_CAPTCHA_ATTRIBUTE(member, name, cb)
+#include "captcha_attributes.h"
+#undef LONG_CAPTCHA_ATTRIBUTE
+#undef STRING_CAPTCHA_ATTRIBUTE
+        {
+            convert_to_long(*value);
+            if (NULL == attributes[attribute].cb || attributes[attribute].cb(*value TSRMLS_CC)) {
+                *((long *) (((char *) co) + attributes[attribute].offset)) = Z_LVAL_PP(value);
+                return 1;
+            }
+            break;
+        }
+#define LONG_CAPTCHA_ATTRIBUTE(member, name, cb)
+#define STRING_CAPTCHA_ATTRIBUTE(member, name, cb) \
+        case CAPTCHA_ATTR_PREFIX(name):
+#include "captcha_attributes.h"
+#undef LONG_CAPTCHA_ATTRIBUTE
+#undef STRING_CAPTCHA_ATTRIBUTE
+        {
+            convert_to_string(*value);
+            efree(*((char **) (((char *) co) + attributes[attribute].offset)));
+            *((char **) (((char *) co) + attributes[attribute].offset)) = estrndup(Z_STRVAL_PP(value), Z_STRLEN_PP(value));
+            *((long *) (((char *) co) + attributes[attribute].offset + sizeof(char *))) = Z_STRLEN_PP(value);
+            return 1;
+            break;
+        }
+        default:
+            php_error_docref(NULL TSRMLS_CC, E_WARNING, "Unknown attribute %lu", attribute);
+    }
+
+    return 0;
 }
 
 static void captcha_ctor(INTERNAL_FUNCTION_PARAMETERS)
 {
-    zval *object;
-    Captcha_object* co;
-    char *key = NULL;
-    long key_len = 0;
     char *name;
     size_t name_len;
+    char *key = NULL;
+    long key_len = 0;
+    Captcha_object* co;
+    zval *object, *options = NULL;
 
     object = return_value;
-    if (FAILURE == zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s", &key, &key_len)) {
+    if (FAILURE == zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s|a", &key, &key_len, &options)) {
         zval_dtor(return_value);
         RETURN_NULL();
     }
     co = (Captcha_object *) zend_object_store_get_object(object TSRMLS_CC);
+    co->challenge_length = 8;
+    co->fake_characters_length = 2;
+    co->noise_length = 2;
+    co->session_prefix = estrdup("captcha_");
+    co->fake_characters_style = estrdup("display: none");
+    co->significant_characters_style = estrndup("", 0);
+    co->fake_characters_color = 0;
+    co->significant_characters_color = 0;
+    if (options) {
+        char *str_key;
+        ulong long_key;
+        zval **attr_value;
+
+        zend_hash_internal_pointer_reset(Z_ARRVAL_P(options));
+        while (SUCCESS == zend_hash_get_current_data(Z_ARRVAL_P(options), (void**) &attr_value) && HASH_KEY_IS_LONG == zend_hash_get_current_key(Z_ARRVAL_P(options), &str_key, &long_key, 0)) {
+            captcha_set_attribute(co, long_key, attr_value TSRMLS_CC);
+            zend_hash_move_forward(Z_ARRVAL_P(options));
+        }
+    }
     if (key_len == 0) {
         zend_throw_exception_ex(NULL, 0 TSRMLS_CC, "Key must not be empty");
         zval_dtor(return_value);
@@ -990,6 +1161,29 @@ PHP_METHOD(Captcha, __construct)
 {
     return_value = getThis();
     captcha_ctor(INTERNAL_FUNCTION_PARAM_PASSTHRU);
+}
+
+PHP_FUNCTION(captcha_cleanup)
+{
+    char *name;
+    size_t name_len;
+    zval *object = NULL;
+    Captcha_object *co = NULL;
+
+    if (FAILURE == zend_parse_method_parameters(ZEND_NUM_ARGS() TSRMLS_CC, getThis(), "O", &object, Captcha_ce_ptr)) {
+        RETURN_FALSE;
+    }
+    if (SESSION_IS_ACTIVE()) {
+        CAPTCHA_FETCH_OBJ(co, object);
+        COMPLETE_SESSION_KEY(co, name, name_len);
+        if (SUCCESS == zend_hash_del(Z_ARRVAL_P(PS(http_session_vars)), name, name_len + 1)) {
+            RETURN_TRUE;
+        } else {
+            RETURN_FALSE;
+        }
+    } else {
+        RETURN_FALSE;
+    }
 }
 
 #define smart_str_append_static(/*smart_str **/ self, /*const char **/ s) \
@@ -1053,7 +1247,7 @@ static void hsl_to_rgb(uint16_t _h, uint8_t _s, uint8_t _l, uint8_t *r, uint8_t 
     }
 }
 
-static void set_color(smart_str *ret, int significant TSRMLS_DC)
+static void set_color(smart_str *ret, Captcha_object *co, int significant TSRMLS_DC)
 {
     uint16_t h;
     uint8_t s, l, r, g, b;
@@ -1061,14 +1255,14 @@ static void set_color(smart_str *ret, int significant TSRMLS_DC)
     static const char hexdigits[] = "0123456789ABCDEF";
 
     if (significant) {
-        if (CAPTCHA_G(significant_characters_color)) {
-            c = &colordefs[CAPTCHA_G(significant_characters_color)];
+        if (CAPTCHA_ATTR(significant_characters_color)) {
+            c = &colordefs[CAPTCHA_ATTR(significant_characters_color)];
         } else {
             return;
         }
     } else {
-        if (CAPTCHA_G(fake_characters_color)) {
-            c = &colordefs[CAPTCHA_G(fake_characters_color)];
+        if (CAPTCHA_ATTR(fake_characters_color)) {
+            c = &colordefs[CAPTCHA_ATTR(fake_characters_color)];
         } else {
             return;
         }
@@ -1098,8 +1292,8 @@ static void generate_char(smart_str *ret, Captcha_object *co, long index, char c
     }
     smart_str_append_long(ret, index + 1);
     smart_str_append_static(ret, "):after { content: \"");
-    if (CAPTCHA_G(noise_length)) {
-        noise = captcha_rand(CAPTCHA_G(noise_length) TSRMLS_CC);
+    if (CAPTCHA_ATTR(noise_length)) {
+        noise = captcha_rand(CAPTCHA_ATTR(noise_length) TSRMLS_CC);
         if (noise) {
             long l;
 
@@ -1113,8 +1307,8 @@ static void generate_char(smart_str *ret, Captcha_object *co, long index, char c
     p = char2int(c);
     e = table[p].tbl[captcha_rand(table[p].length - 1 TSRMLS_CC)];
     smart_str_appends(ret, e);
-    if (CAPTCHA_G(noise_length)) {
-        noise = captcha_rand(CAPTCHA_G(noise_length) TSRMLS_CC);
+    if (CAPTCHA_ATTR(noise_length)) {
+        noise = captcha_rand(CAPTCHA_ATTR(noise_length) TSRMLS_CC);
         if (noise) {
             long l;
 
@@ -1125,11 +1319,11 @@ static void generate_char(smart_str *ret, Captcha_object *co, long index, char c
         }
     }
     smart_str_append_static(ret, "\"; ");
-    set_color(ret, significant TSRMLS_CC);
+    set_color(ret, co, significant TSRMLS_CC);
     if (significant) {
-        smart_str_appends(ret, CAPTCHA_G(significant_characters_style));
+        smart_str_appends(ret, CAPTCHA_ATTR(significant_characters_style));
     } else {
-        smart_str_appends(ret, CAPTCHA_G(fake_characters_style));
+        smart_str_appends(ret, CAPTCHA_ATTR(fake_characters_style));
     }
     smart_str_append_static(ret, " }\n");
 }
@@ -1141,7 +1335,7 @@ PHP_FUNCTION(captcha_render)
     zval *object = NULL;
     smart_str ret = { 0 };
     Captcha_object *co = NULL;
-    long total_len, /*noise = 0,*/ what = CAPTCHA_CSS | CAPTCHA_HTML;
+    long total_len, /*noise = 0,*/ what = CAPTCHA_RENDER_CSS | CAPTCHA_RENDER_HTML;
 
     if (FAILURE == zend_parse_method_parameters(ZEND_NUM_ARGS() TSRMLS_CC, getThis(), "O|l", &object, Captcha_ce_ptr, &what)) {
         RETURN_FALSE;
@@ -1153,11 +1347,11 @@ PHP_FUNCTION(captcha_render)
     } else {
         total_len = Z_STRLEN_P(co->challenge) + zend_hash_num_elements(Z_ARRVAL_P(co->fakes));
     }
-    if (what & CAPTCHA_CSS) {
+    if (what & CAPTCHA_RENDER_CSS) {
         long i;
         unsigned char index[ARRAY_SIZE(shuffling)], map[ARRAY_SIZE(shuffling)];
 
-        if (what & CAPTCHA_HTML) {
+        if (what & CAPTCHA_RENDER_HTML) {
             smart_str_append_static(&ret, "<style type=\"text/css\">\n");
         }
         memcpy(index, shuffling, total_len);
@@ -1193,12 +1387,12 @@ PHP_FUNCTION(captcha_render)
                 generate_char(&ret, co, index[i], Z_STRVAL_P(co->challenge)[map[index[i]]], 1 TSRMLS_CC);
             }
         }
-        if (what & CAPTCHA_HTML) {
+        if (what & CAPTCHA_RENDER_HTML) {
             smart_str_append_static(&ret, "</style>\n");
         }
     }
 
-    if (what & CAPTCHA_HTML) {
+    if (what & CAPTCHA_RENDER_HTML) {
         smart_str_append_static(&ret, "<div id=\"captcha\">");
         smart_str_append_static_repeated(&ret, total_len, "<span></span>");
         smart_str_append_static(&ret, "</div>");
@@ -1256,29 +1450,6 @@ PHP_FUNCTION(captcha_get_key)
     RETURN_STRINGL(co->key, co->key_len, 1);
 }
 
-PHP_FUNCTION(captcha_cleanup)
-{
-    char *name;
-    size_t name_len;
-    zval *object = NULL;
-    Captcha_object *co = NULL;
-
-    if (FAILURE == zend_parse_method_parameters(ZEND_NUM_ARGS() TSRMLS_CC, getThis(), "O", &object, Captcha_ce_ptr)) {
-        RETURN_FALSE;
-    }
-    if (SESSION_IS_ACTIVE()) {
-        CAPTCHA_FETCH_OBJ(co, object);
-        COMPLETE_SESSION_KEY(co, name, name_len);
-        if (SUCCESS == zend_hash_del(Z_ARRVAL_P(PS(http_session_vars)), name, name_len + 1)) {
-            RETURN_TRUE;
-        } else {
-            RETURN_FALSE;
-        }
-    } else {
-        RETURN_FALSE;
-    }
-}
-
 PHP_FUNCTION(captcha_get_challenge)
 {
     zval *object = NULL;
@@ -1305,6 +1476,58 @@ PHP_FUNCTION(captcha_get_attempts)
     MAKE_COPY_ZVAL(&co->attempts, return_value);
 }
 
+PHP_FUNCTION(captcha_get_attribute)
+{
+    long attr;
+    zval *object = NULL;
+    Captcha_object *co = NULL;
+
+    if (FAILURE == zend_parse_method_parameters(ZEND_NUM_ARGS() TSRMLS_CC, getThis(), "Ol", &object, Captcha_ce_ptr, &attr)) {
+        RETURN_FALSE;
+    }
+    CAPTCHA_FETCH_OBJ(co, object);
+    switch (attr) {
+#define LONG_CAPTCHA_ATTRIBUTE(member, name, cb) \
+        case CAPTCHA_ATTR_PREFIX(name):
+#define STRING_CAPTCHA_ATTRIBUTE(member, name, cb)
+#include "captcha_attributes.h"
+#undef LONG_CAPTCHA_ATTRIBUTE
+#undef STRING_CAPTCHA_ATTRIBUTE
+        {
+            RETURN_LONG(*((long *) (((char *) co) + attributes[attr].offset)));
+        }
+#define LONG_CAPTCHA_ATTRIBUTE(member, name, cb)
+#define STRING_CAPTCHA_ATTRIBUTE(member, name, cb) \
+        case CAPTCHA_ATTR_PREFIX(name):
+#include "captcha_attributes.h"
+#undef LONG_CAPTCHA_ATTRIBUTE
+#undef STRING_CAPTCHA_ATTRIBUTE
+        {
+            RETURN_STRINGL(
+                *((char **) (((char *) co) + attributes[attr].offset)),
+                *((long *) (((char *) co) + attributes[attr].offset + sizeof(char *))),
+                1 // duplicate
+            );
+        }
+    }
+    RETURN_NULL();
+}
+
+PHP_FUNCTION(captcha_set_attribute)
+{
+    long attr;
+    zval *value = NULL;
+    zval *object = NULL;
+    Captcha_object *co = NULL;
+
+    if (FAILURE == zend_parse_method_parameters(ZEND_NUM_ARGS() TSRMLS_CC, getThis(), "Olz", &object, Captcha_ce_ptr, &attr, &value)) {
+        RETURN_FALSE;
+    }
+    CAPTCHA_FETCH_OBJ(co, object);
+
+    RETURN_BOOL(captcha_set_attribute(co, attr, &value TSRMLS_CC));
+}
+
 static PHP_METHOD(Captcha, __wakeup)
 {
     zend_throw_exception_ex(NULL, 0 TSRMLS_CC, "You cannot serialize or unserialize %s instances", Captcha_ce_ptr->name);
@@ -1315,78 +1538,7 @@ static PHP_METHOD(Captcha, __sleep)
     zend_throw_exception_ex(NULL, 0 TSRMLS_CC, "You cannot serialize or unserialize %s instances", Captcha_ce_ptr->name);
 }
 
-ZEND_API ZEND_INI_MH(OnUpdateChallengeLength)
-{
-    long *p, tmp;
-#ifndef ZTS
-    char *base = (char *) mh_arg2;
-#else
-    char *base;
-
-    base = (char *) ts_resource(*((int *) mh_arg2));
-#endif /* !ZTS */
-
-    tmp = zend_atol(new_value, new_value_length);
-    if (tmp < 0) {
-        return FAILURE;
-    }
-    if (tmp > MAX_CHALLENGE_LENGTH) {
-        int err_type;
-
-        if (ZEND_INI_STAGE_RUNTIME == stage) {
-            err_type = E_WARNING;
-        } else {
-            err_type = E_ERROR;
-        }
-        php_error_docref(NULL TSRMLS_CC, err_type, "Challenge cannot exceed %lu", MAX_CHALLENGE_LENGTH);
-        return FAILURE;
-    }
-
-    p = (long *) (base + (size_t) mh_arg1);
-    *p = tmp;
-
-    return SUCCESS;
-}
-
-ZEND_API ZEND_INI_MH(OnUpdateColor)
-{
-    long *p, tmp;
-#ifndef ZTS
-    char *base = (char *) mh_arg2;
-#else
-    char *base;
-
-    base = (char *) ts_resource(*((int *) mh_arg2));
-#endif /* !ZTS */
-
-    tmp = zend_atol(new_value, new_value_length);
-    if (tmp < 0 || tmp > ARRAY_SIZE(colordefs)) {
-        int err_type;
-
-        if (ZEND_INI_STAGE_RUNTIME == stage) {
-            err_type = E_WARNING;
-        } else {
-            err_type = E_ERROR;
-        }
-        php_error_docref(NULL TSRMLS_CC, err_type, "Invalid color value: %ld", tmp);
-        return FAILURE;
-    }
-
-    p = (long *) (base + (size_t) mh_arg1);
-    *p = tmp;
-
-    return SUCCESS;
-}
-
 PHP_INI_BEGIN()
-    STD_PHP_INI_ENTRY(CAPTCHA_INI_PREFIX ".challenge_length", "8", PHP_INI_ALL, OnUpdateChallengeLength, challenge_length, zend_captcha_globals, captcha_globals)
-    STD_PHP_INI_ENTRY(CAPTCHA_INI_PREFIX ".fake_characters_length", "2", PHP_INI_ALL, OnUpdateChallengeLength, fake_characters_length, zend_captcha_globals, captcha_globals)
-    STD_PHP_INI_ENTRY(CAPTCHA_INI_PREFIX ".noise_length", "2", PHP_INI_ALL, OnUpdateLong, noise_length, zend_captcha_globals, captcha_globals)
-    STD_PHP_INI_ENTRY(CAPTCHA_INI_PREFIX ".session_prefix", "captcha_", PHP_INI_ALL, OnUpdateStringUnempty, session_prefix, zend_captcha_globals, captcha_globals)
-    STD_PHP_INI_ENTRY(CAPTCHA_INI_PREFIX ".fake_characters_style", "display: none", PHP_INI_ALL, OnUpdateString, fake_characters_style, zend_captcha_globals, captcha_globals)
-    STD_PHP_INI_ENTRY(CAPTCHA_INI_PREFIX ".significant_characters_style", "", PHP_INI_ALL, OnUpdateString, significant_characters_style, zend_captcha_globals, captcha_globals)
-    STD_PHP_INI_ENTRY(CAPTCHA_INI_PREFIX ".fake_characters_color", "", PHP_INI_ALL, OnUpdateColor, fake_characters_color, zend_captcha_globals, captcha_globals)
-    STD_PHP_INI_ENTRY(CAPTCHA_INI_PREFIX ".significant_characters_color", "", PHP_INI_ALL, OnUpdateColor, significant_characters_color, zend_captcha_globals, captcha_globals)
 PHP_INI_END()
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_captcha_void, 0, 0, 1)
@@ -1398,13 +1550,25 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_captcha_0or1arg, 0, 0, 1)
     ZEND_ARG_INFO(0, arg1)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_captcha_1or2arg, 0, 0, 2)
+    ZEND_ARG_INFO(0, captcha)
+    ZEND_ARG_INFO(0, arg1)
+    ZEND_ARG_INFO(0, arg2)
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_INFO_EX(arginfo_captcha_1arg, 0, 0, 2)
     ZEND_ARG_INFO(0, captcha)
     ZEND_ARG_INFO(0, arg1)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_captcha_2arg, 0, 0, 3)
+    ZEND_ARG_INFO(0, captcha)
+    ZEND_ARG_INFO(0, arg1)
+    ZEND_ARG_INFO(0, arg2)
+ZEND_END_ARG_INFO()
+
 static const zend_function_entry captcha_functions[] = {
-    PHP_FE(captcha_create, arginfo_captcha_1arg)
+    PHP_FE(captcha_create, arginfo_captcha_1or2arg)
     PHP_FE(captcha_render, arginfo_captcha_0or1arg)
     PHP_FE(captcha_validate, arginfo_captcha_1arg)
     PHP_FE(captcha_renew, arginfo_captcha_void)
@@ -1412,6 +1576,8 @@ static const zend_function_entry captcha_functions[] = {
     PHP_FE(captcha_get_key, arginfo_captcha_void)
     PHP_FE(captcha_get_challenge, arginfo_captcha_void)
     PHP_FE(captcha_get_attempts, arginfo_captcha_void)
+    PHP_FE(captcha_get_attribute, arginfo_captcha_1arg)
+    PHP_FE(captcha_set_attribute, arginfo_captcha_2arg)
     PHP_FE_END
 };
 
@@ -1432,15 +1598,25 @@ ZEND_BEGIN_ARG_INFO_EX(ainfo_captcha_0or1arg, 0, 0, 0)
     ZEND_ARG_INFO(0, arg1)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO_EX(ainfo_captcha_1or2arg, 0, 0, 1)
+    ZEND_ARG_INFO(0, arg1)
+    ZEND_ARG_INFO(0, arg2)
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_INFO_EX(ainfo_captcha_1arg, 0, 0, 1)
+    ZEND_ARG_INFO(0, arg1)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(ainfo_captcha_2arg, 0, 0, 2)
+    ZEND_ARG_INFO(0, arg1)
     ZEND_ARG_INFO(0, arg1)
 ZEND_END_ARG_INFO()
 
 zend_function_entry Captcha_class_functions[] = {
     PHP_ME(Captcha, __sleep, ainfo_captcha_void, ZEND_ACC_PUBLIC|ZEND_ACC_FINAL)
     PHP_ME(Captcha, __wakeup, ainfo_captcha_void, ZEND_ACC_PUBLIC|ZEND_ACC_FINAL)
-    PHP_ME(Captcha, __construct, ainfo_captcha_1arg, ZEND_ACC_PUBLIC|ZEND_ACC_CTOR)
-    PHP_ME_MAPPING(create, captcha_create, ainfo_captcha_1arg, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
+    PHP_ME(Captcha, __construct, ainfo_captcha_1or2arg, ZEND_ACC_PUBLIC|ZEND_ACC_CTOR)
+    PHP_ME_MAPPING(create, captcha_create, ainfo_captcha_1or2arg, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
     PHP_ME_MAPPING(render, captcha_render, ainfo_captcha_0or1arg, ZEND_ACC_PUBLIC)
     PHP_ME_MAPPING(validate, captcha_validate, ainfo_captcha_1arg, ZEND_ACC_PUBLIC)
     PHP_ME_MAPPING(renew, captcha_renew, ainfo_captcha_void, ZEND_ACC_PUBLIC)
@@ -1448,6 +1624,8 @@ zend_function_entry Captcha_class_functions[] = {
     PHP_ME_MAPPING(getKey, captcha_get_key, ainfo_captcha_void, ZEND_ACC_PUBLIC)
     PHP_ME_MAPPING(getChallenge, captcha_get_challenge, ainfo_captcha_void, ZEND_ACC_PUBLIC)
     PHP_ME_MAPPING(getAttempts, captcha_get_attempts, ainfo_captcha_void, ZEND_ACC_PUBLIC)
+    PHP_ME_MAPPING(getAttribute, captcha_get_attribute, ainfo_captcha_1arg, ZEND_ACC_PUBLIC)
+    PHP_ME_MAPPING(setAttribute, captcha_set_attribute, ainfo_captcha_2arg, ZEND_ACC_PUBLIC)
     PHP_FE_END
 };
 
@@ -1457,6 +1635,14 @@ static void Captcha_objects_free(zend_object *object TSRMLS_DC)
 
     zend_object_std_dtor(&co->zo TSRMLS_CC);
 
+#define LONG_CAPTCHA_ATTRIBUTE(member, name, cb)
+#define STRING_CAPTCHA_ATTRIBUTE(member, name, cb) \
+        if (NULL != co->member) { \
+            efree(co->member); \
+        }
+#include "captcha_attributes.h"
+#undef LONG_CAPTCHA_ATTRIBUTE
+#undef STRING_CAPTCHA_ATTRIBUTE
     if (NULL != co->key) {
         efree(co->key);
     }
@@ -1492,11 +1678,22 @@ static PHP_MINIT_FUNCTION(captcha)
     Captcha_ce_ptr = zend_register_internal_class(&ce TSRMLS_CC);
     memcpy(&Captcha_handlers, zend_get_std_object_handlers(), sizeof(zend_object_handlers));
 
-    zend_declare_class_constant_long(Captcha_ce_ptr, "CSS",  STR_LEN("CSS"),  CAPTCHA_CSS TSRMLS_CC);
-    zend_declare_class_constant_long(Captcha_ce_ptr, "HTML", STR_LEN("HTML"), CAPTCHA_HTML TSRMLS_CC);
-    for (i = 0; i < ARRAY_SIZE(colordefs); i++) {
-        zend_declare_class_constant_long(Captcha_ce_ptr, colordefs[i].name, strlen(colordefs[i].name), i TSRMLS_CC);
-    }
+    zend_declare_class_constant_long(Captcha_ce_ptr, "RENDER_CSS",  STR_LEN("RENDER_CSS"),  CAPTCHA_RENDER_CSS TSRMLS_CC);
+    zend_declare_class_constant_long(Captcha_ce_ptr, "RENDER_HTML", STR_LEN("RENDER_HTML"), CAPTCHA_RENDER_HTML TSRMLS_CC);
+
+#define CAPTCHA_COLOR(hminx, hmax, smin, smax, lmin, lmax, name) \
+    zend_declare_class_constant_long(Captcha_ce_ptr, "COLOR_" #name, STR_LEN("COLOR_" #name), CAPTCHA_COLOR_PREFIX(name) TSRMLS_CC);
+#include "captcha_colors.h"
+#undef CAPTCHA_COLOR
+
+// printf("%s %d\n", "ATTR_" #name, STR_LEN("ATTR_" #name));
+# define LONG_CAPTCHA_ATTRIBUTE(member, name, cb) \
+    zend_declare_class_constant_long(Captcha_ce_ptr, "ATTR_" #name, STR_LEN("ATTR_" #name), CAPTCHA_ATTR_PREFIX(name) TSRMLS_CC);
+# define STRING_CAPTCHA_ATTRIBUTE(member, name, cb) \
+    zend_declare_class_constant_long(Captcha_ce_ptr, "ATTR_" #name, STR_LEN("ATTR_" #name), CAPTCHA_ATTR_PREFIX(name) TSRMLS_CC);
+# include "captcha_attributes.h"
+# undef LONG_CAPTCHA_ATTRIBUTE
+# undef STRING_CAPTCHA_ATTRIBUTE
 
     return SUCCESS;
 }
@@ -1508,10 +1705,15 @@ static PHP_MSHUTDOWN_FUNCTION(captcha)
     return SUCCESS;
 }
 
+#define STRINGIFY(x) #x
+#define STRINGIFY_EXPANDED(x) STRINGIFY(x)
+
 static PHP_MINFO_FUNCTION(captcha)
 {
     php_info_print_table_start();
     php_info_print_table_row(2, "CSS Captcha", "enabled");
+    php_info_print_table_row(2, "Alphabet", alphabet);
+    php_info_print_table_row(2, "Unicode version", STRINGIFY_EXPANDED(CAPTCHA_UNICODE_MAJOR) "." STRINGIFY_EXPANDED(CAPTCHA_UNICODE_MINOR) "." STRINGIFY_EXPANDED(CAPTCHA_UNICODE_PATCH));
     php_info_print_table_end();
 
     DISPLAY_INI_ENTRIES();
@@ -1534,9 +1736,7 @@ zend_module_entry captcha_module_entry = {
     PHP_RSHUTDOWN(captcha),
     PHP_MINFO(captcha),
     NO_VERSION_YET,
-    PHP_MODULE_GLOBALS(captcha),
-    NULL,
-    NULL,
+    NO_MODULE_GLOBALS,
     NULL,
     STANDARD_MODULE_PROPERTIES_EX
 };

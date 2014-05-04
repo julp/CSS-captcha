@@ -1,21 +1,25 @@
 <?php
 class CSSCaptcha {
 
-    const CSS  = 0x01;
-    const HTML = 0x10;
+    const RENDER_CSS  = 0x01;
+    const RENDER_HTML = 0x10;
 
-    const SESSION_PREFIX   = 'captcha_'; // prefix for session variables
-    const CHALLENGE_LENGTH = 8;          // length of challenge string (fake characters excluded)
-    const FAKE_CHARACTERS_COUNT = 2;     // number of fake characters generated in HTML/CSS
-    const ONLY_LTR         = FALSE;      // set FALSE to allow random float: right;
+    const COLOR_NONE = 0;
+    const COLOR_RED = __LINE__;
+    const COLOR_BLUE = __LINE__;
+    const COLOR_GREEN = __LINE__;
+    const COLOR_DARK = __LINE__;
+    const COLOR_LIGHT = __LINE__;
 
-    public static $noise_length = 2;
-    public static $fake_character_style   = 'display: none;';
-    public static $normal_character_style = '';
-
-    const WRAPPER_TAG_NAME = 'div';     // TODO: unused
-    const WRAPPER_TAG_ID   = 'captcha'; // TODO: unused
-    const INNER_TAGS_NAME  = 'span';    // TODO: unused
+    const ATTR_ONLY_LTR = __LINE__;
+    const ATTR_NOISE_LENGTH = __LINE__;
+    const ATTR_SESSION_PREFIX = __LINE__;
+    const ATTR_CHALLENGE_LENGTH = __LINE__;
+    const ATTR_FAKE_CHARACTERS_COLOR = __LINE__;
+    const ATTR_FAKE_CHARACTERS_STYLE = __LINE__;
+    const ATTR_FAKE_CHARACTERS_LENGTH = __LINE__;
+    const ATTR_SIGNIFICANT_CHARACTERS_COLOR = __LINE__;
+    const ATTR_SIGNIFICANT_CHARACTERS_STYLE = __LINE__;
 
     protected static $_tables = array(
         array(
@@ -350,22 +354,35 @@ class CSSCaptcha {
     protected $_challenge;
     protected $_attempts = 0;
 
+    private $_attributes = array(
+        self::ATTR_ONLY_LTR => FALSE,
+        self::ATTR_NOISE_LENGTH => 2,
+        self::ATTR_CHALLENGE_LENGTH => 8,
+        self::ATTR_SESSION_PREFIX => 'captcha_',
+        self::ATTR_FAKE_CHARACTERS_LENGTH => 2,
+        self::ATTR_FAKE_CHARACTERS_STYLE => 'display: none;',
+        self::ATTR_FAKE_CHARACTERS_COLOR => self::COLOR_NONE,
+        self::ATTR_SIGNIFICANT_CHARACTERS_STYLE => '',
+        self::ATTR_SIGNIFICANT_CHARACTERS_COLOR => self::COLOR_NONE,
+    );
+
+    const ALPHABET = '0123456789abcdefghijklmnopqrstuvwxyz';
+
     protected function generateChallenge()
     {
-        $alphabet = '0123456789abcdefghijklmnopqrstuvwxyz';
-
-        $token = str_repeat(' ', self::FAKE_CHARACTERS_COUNT);
-        for ($i = 0; $i < self::CHALLENGE_LENGTH; $i++) {
-            $token .= $alphabet[rand(0, 35)];
+        $token = str_repeat(' ', $this->_attributes[self::ATTR_FAKE_CHARACTERS_LENGTH]);
+        for ($i = 0; $i < $this->_attributes[self::ATTR_CHALLENGE_LENGTH]; $i++) {
+            // can't use: $token .= self::ALPHABET[rand(0, strlen(self::ALPHABET) - 1)]; ?!?
+            $token .= substr(self::ALPHABET, rand(0, strlen(self::ALPHABET) - 1), 1);
         }
         $token = str_shuffle($token);
 
         return $token;
     }
 
-    protected static function generateIgnorables()
+    protected function generateIgnorables()
     {
-        if (self::$noise_length && ($noise = rand(0, self::$noise_length))) {
+        if ($this->_attributes[self::ATTR_NOISE_LENGTH] && ($noise = rand(0, $this->_attributes[self::ATTR_NOISE_LENGTH]))) {
             return implode(
                 array_intersect_key(
                     self::$_ignorables,
@@ -385,37 +402,41 @@ class CSSCaptcha {
         }
     }
 
-    public function __construct($key)
+    public function __construct($key, $attributes = array())
     {
         $this->_key = $key;
         self::checkActiveSession();
-        if (array_key_exists(self::SESSION_PREFIX . $key, $_SESSION)) {
+        foreach ($attributes as $k => $v) {
+            $this->setAttribute($k, $v);
+        }
+        if (array_key_exists($this->_attributes[self::ATTR_SESSION_PREFIX] . $key, $_SESSION)) {
             if (
-                   !is_array($_SESSION[self::SESSION_PREFIX . $key])
-                || !array_key_exists('attempts', $_SESSION[self::SESSION_PREFIX . $key])
-                || !array_key_exists('challenge', $_SESSION[self::SESSION_PREFIX . $key])
-                || !is_int($_SESSION[self::SESSION_PREFIX . $key]['attempts'])
-                || !is_string($_SESSION[self::SESSION_PREFIX . $key]['challenge'])
-                || !$_SESSION[self::SESSION_PREFIX . $key]['challenge']
+                   !is_array($_SESSION[$this->_attributes[self::ATTR_SESSION_PREFIX] . $key])
+                || !array_key_exists('attempts', $_SESSION[$this->_attributes[self::ATTR_SESSION_PREFIX] . $key])
+                || !array_key_exists('challenge', $_SESSION[$this->_attributes[self::ATTR_SESSION_PREFIX] . $key])
+                || !is_int($_SESSION[$this->_attributes[self::ATTR_SESSION_PREFIX] . $key]['attempts'])
+                || !is_string($_SESSION[$this->_attributes[self::ATTR_SESSION_PREFIX] . $key]['challenge'])
+                || !$_SESSION[$this->_attributes[self::ATTR_SESSION_PREFIX] . $key]['challenge']
+                || !preg_match('.^[' . preg_quote(self::ALPHABET) . ']*$.D', $_SESSION[$this->_attributes[self::ATTR_SESSION_PREFIX] . $key]['challenge'])
             ) {
                 $this->renew();
             } else {
-                $this->_attempts = &$_SESSION[self::SESSION_PREFIX . $this->_key]['attempts'];
-                $this->_challenge = &$_SESSION[self::SESSION_PREFIX . $this->_key]['challenge'];
+                $this->_attempts = &$_SESSION[$this->_attributes[self::ATTR_SESSION_PREFIX] . $this->_key]['attempts'];
+                $this->_challenge = &$_SESSION[$this->_attributes[self::ATTR_SESSION_PREFIX] . $this->_key]['challenge'];
             }
         } else {
             $this->renew();
         }
     }
 
-    public function render($what = 0x11/*self::CSS | self::HTML*/)
+    public function render($what = 0x11/*self::RENDER_CSS | self::RENDER_HTML*/)
     {
         $ret = '';
 
-        $rtl = ($what == self::CSS | self::HTML) && !self::ONLY_LTR && rand(0, 1); # TODO: remove $what == self::CSS | self::HTML test, implies to move "$rtl" to a higher "scope" (session and/or attribute)
+        $rtl = ($what == self::RENDER_CSS | self::RENDER_HTML) && !$this->_attributes[self::ATTR_ONLY_LTR] && rand(0, 1); # TODO: remove $what == self::RENDER_CSS | self::RENDER_HTML test, implies to move "$rtl" to a higher "scope" (session and/or attribute)
 
-        if ($what & self::CSS) {
-            if ($what & self::HTML) {
+        if ($what & self::RENDER_CSS) {
+            if ($what & self::RENDER_HTML) {
                 $ret .= '<style type="text/css">';
             }
             if ($rtl) {
@@ -430,19 +451,21 @@ class CSSCaptcha {
             shuffle($index);
             foreach ($index as $i) {
                 if ($challenge[$i] == ' ') {
-                    $ret .= '#captcha span:nth-child(' . ($i + 1) . ') { ' . self::$fake_character_style . ' }' . "\n";
-                    $p = rand(0, 35);
+                    $ret .= '#captcha span:nth-child(' . ($i + 1) . ') { ' . $this->_attributes[self::ATTR_FAKE_CHARACTERS_STYLE] . ' }' . "\n";
+                    $p = rand(0, strlen(self::ALPHABET) - 1);
+                    $fake = TRUE;
                 } else {
                     $p = intval($challenge[$i], 36);
+                    $fake = FALSE;
                 }
-                $ret .= '#captcha span:nth-child(' . ($i + 1) . '):after { content: "' . self::generateIgnorables() . '\\' . self::$_tables[$p][array_rand(self::$_tables[$p])] . self::generateIgnorables() . '"; ' /*. self::$normal_character_style*/ . ' }' . "\n";
+                $ret .= '#captcha span:nth-child(' . ($i + 1) . '):after { content: "' . $this->generateIgnorables() . '\\' . self::$_tables[$p][array_rand(self::$_tables[$p])] . $this->generateIgnorables() . '"; ' . ($fake ? '' : $this->_attributes[self::ATTR_SIGNIFICANT_CHARACTERS_STYLE]) . ' }' . "\n";
             }
-            if ($what & self::HTML) {
+            if ($what & self::RENDER_HTML) {
                 $ret .= '</style>';
             }
         }
 
-        if ($what & self::HTML) {
+        if ($what & self::RENDER_HTML) {
             $ret .= '<div id="captcha">' . str_repeat('<span></span>', strlen($this->_challenge)) . '</div>';
         }
 
@@ -457,7 +480,7 @@ class CSSCaptcha {
 
     public function cleanup()
     {
-        unset($_SESSION[self::SESSION_PREFIX . $this->_key]);
+        unset($_SESSION[$this->_attributes[self::ATTR_SESSION_PREFIX] . $this->_key]);
     }
 
     public function renew()
@@ -467,13 +490,13 @@ class CSSCaptcha {
         $this->_attempts = 0;
         $this->_challenge = $this->generateChallenge();
         */
-        # $_SESSION[self::SESSION_PREFIX . $this->_key] may be not yet "initialized"
-        $_SESSION[self::SESSION_PREFIX . $this->_key] = array(
+        # $_SESSION[$this->_attributes[self::ATTR_SESSION_PREFIX] . $this->_key] may be not yet "initialized"
+        $_SESSION[$this->_attributes[self::ATTR_SESSION_PREFIX] . $this->_key] = array(
             'attempts'  => 0,
             'challenge' => $this->generateChallenge(),
         );
-        $this->_attempts = &$_SESSION[self::SESSION_PREFIX . $this->_key]['attempts'];
-        $this->_challenge = &$_SESSION[self::SESSION_PREFIX . $this->_key]['challenge'];
+        $this->_attempts = &$_SESSION[$this->_attributes[self::ATTR_SESSION_PREFIX] . $this->_key]['attempts'];
+        $this->_challenge = &$_SESSION[$this->_attributes[self::ATTR_SESSION_PREFIX] . $this->_key]['challenge'];
     }
 
     public function getKey()
@@ -490,14 +513,36 @@ class CSSCaptcha {
     {
         return $this->_attempts;
     }
+
+    public function getAttribute($attribute)
+    {
+        if (array_key_exists($attribute, $this->_attributes)) {
+            return $this->_attributes[$attribute];
+        } else {
+            return NULL;
+        }
+    }
+
+    public function setAttribute($attribute, $value)
+    {
+        if (array_key_exists($attribute, $this->_attributes)) {
+            if (in_array($attribute, array(self::ATTR_FAKE_CHARACTERS_COLOR, self::ATTR_SIGNIFICANT_CHARACTERS_COLOR))) {
+                return FALSE;
+            }
+            $this->_attributes[$attribute] = $value;
+            return TRUE;
+        } else {
+            return FALSE;
+        }
+    }
 }
 
-function captcha_create($key)
+function captcha_create($key, $options = array())
 {
-    return new CSSCaptcha($key);
+    return new CSSCaptcha($key, $options);
 }
 
-function captcha_render(CSSCaptcha $captcha, $what = 0x11/*CSSCaptcha::CSS | CSSCaptcha::HTML*/)
+function captcha_render(CSSCaptcha $captcha, $what = 0x11/*CSSCaptcha::RENDER_CSS | CSSCaptcha::RENDER_HTML*/)
 {
     return $captcha->render($what);
 }
@@ -530,4 +575,14 @@ function captcha_get_challenge(CSSCaptcha $captcha)
 function captcha_get_attempts(CSSCaptcha $captcha)
 {
     return $captcha->getAttempts();
+}
+
+function captcha_get_attribute(CSSCaptcha $captcha, $attribute)
+{
+    return $captcha->getAttribute($attribute);
+}
+
+function captcha_set_attribute(CSSCaptcha $captcha, $attribute, $value)
+{
+    return $captcha->setAttribute($attribute, $value);
 }

@@ -9,34 +9,21 @@ typedef struct {
     zend_object zo;
 
     char *key;
-    long key_len;
+    int key_len;
     zval *container;
     zval *challenge;
     zval *attempts;
     zval *fakes;
+# define LONG_CAPTCHA_ATTRIBUTE(member, name, cb) \
+    long member;
+# define STRING_CAPTCHA_ATTRIBUTE(member, name, cb) \
+    char *member; \
+    int *member##_len;
+# include "captcha_attributes.h"
+# undef LONG_CAPTCHA_ATTRIBUTE
+# undef STRING_CAPTCHA_ATTRIBUTE
 } Captcha_object;
 
 extern zend_class_entry *Captcha_ce_ptr;
-
-# ifdef ZTS
-#  include "TSRM.h"
-# endif /* ZTS */
-
-ZEND_BEGIN_MODULE_GLOBALS(captcha)
-    long challenge_length;
-    long fake_characters_length;
-    long noise_length;
-    char *session_prefix;
-    char *fake_characters_style;
-    char *significant_characters_style;
-    long fake_characters_color;
-    long significant_characters_color;
-ZEND_END_MODULE_GLOBALS(captcha)
-
-# ifdef ZTS
-#  define CAPTCHA_G(v) TSRMG(captcha_globals_id, zend_captcha_globals *, v)
-# else
-#  define CAPTCHA_G(v) (captcha_globals.v)
-# endif /* ZTS */
 
 #endif /* !PHP_CAPTCHA_H */

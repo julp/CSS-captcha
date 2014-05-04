@@ -1,7 +1,9 @@
 <?php
 header('Content-Type: text/html; charset=utf-8');
 session_start();
-require('CSSCaptcha.php');
+if (!extension_loaded('captcha')) {
+    require(dirname(__FILE__) . '/../php-plain/CSSCaptcha.php');
+}
 ?>
 <!DOCTYPE html>
 <html>
@@ -12,10 +14,6 @@ require('CSSCaptcha.php');
 <?php
 define('MAX_ATTEMPTS', 10);
 define('KEY', pathinfo(__FILE__, PATHINFO_FILENAME));
-
-// $colors = array('red', 'green', 'blue');
-CSSCaptcha::$fake_character_style = 'color: red;';
-// CSSCaptcha::$normal_character_style = 'color: blue;';
 
 if (isset($_POST['captcha'])) {
     $captcha = new CSSCaptcha(KEY);

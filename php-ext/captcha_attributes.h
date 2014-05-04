@@ -1,0 +1,9 @@
+LONG_CAPTCHA_ATTRIBUTE(noise_length, NOISE_LENGTH, check_zero_or_positive_attribute)
+LONG_CAPTCHA_ATTRIBUTE(challenge_length, CHALLENGE_LENGTH, check_challenge_length_attribute)
+LONG_CAPTCHA_ATTRIBUTE(fake_characters_color, FAKE_CHARACTERS_COLOR, check_color_attribute)
+LONG_CAPTCHA_ATTRIBUTE(fake_characters_length, FAKE_CHARACTERS_LENGTH, check_fake_characters_length_attribute)
+LONG_CAPTCHA_ATTRIBUTE(significant_characters_color, SIGNIFICANT_CHARACTERS_COLOR, check_color_attribute)
+
+STRING_CAPTCHA_ATTRIBUTE(session_prefix, SESSION_PREFIX, NULL)
+STRING_CAPTCHA_ATTRIBUTE(fake_characters_style, FAKE_CHARACTERS_STYLE, NULL)
+STRING_CAPTCHA_ATTRIBUTE(significant_characters_style, SIGNIFICANT_CHARACTERS_STYLE, NULL)

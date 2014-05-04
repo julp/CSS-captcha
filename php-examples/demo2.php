@@ -1,7 +1,9 @@
 <?php
 header('Content-Type: text/html; charset=utf-8');
 session_start();
-require('CSSCaptcha.php');
+if (!extension_loaded('captcha')) {
+    require(dirname(__FILE__) . '/../php-plain/CSSCaptcha.php');
+}
 ?>
 <!DOCTYPE html>
 <html>
@@ -13,8 +15,14 @@ require('CSSCaptcha.php');
 define('MAX_ATTEMPTS', 10);
 define('KEY', pathinfo(__FILE__, PATHINFO_FILENAME));
 
+// $colors = array('red', 'green', 'blue');
+$options = array(
+    CSSCaptcha::ATTR_FAKE_CHARACTERS_STYLE => 'color: red;',
+    CSSCaptcha::ATTR_SIGNIFICANT_CHARACTERS_STYLE => 'color: blue;',
+);
+
 if (isset($_POST['captcha'])) {
-    $captcha = new CSSCaptcha(KEY);
+    $captcha = new CSSCaptcha(KEY, $options);
     if ($captcha->validate($_POST['captcha'])) {
         $captcha->renew();
         echo '<p>You pass, new token created.</p>';
@@ -25,7 +33,7 @@ if (isset($_POST['captcha'])) {
         echo '<p>You fail.</p>';
     }
 } else /*if (!isset($_SESSION['']))*/ {
-    $captcha = new CSSCaptcha(KEY);
+    $captcha = new CSSCaptcha(KEY, $options);
 }
 ?>
         <form method="post" action="">

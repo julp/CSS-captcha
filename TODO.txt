@@ -12,6 +12,7 @@
 * [done?] remove code points newer than Unicode 5.0.0 ? (see unicode/uchar.h, function u_charAge and unicode/uversion.h, function u_versionFromString, then memcmp both)
     => implemented, everyone can generate its own tables
 * generate a random id instead of <div id="captcha"> ? (without digits)
+* wider use of Unicode ?
 
 CSS obfuscation:
 * synonyms for nth-child ? 1/X = first-child, X/X = last-child, ...

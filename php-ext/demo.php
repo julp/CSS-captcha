@@ -1,7 +1,7 @@
 <?php
-ini_set('captcha.fake_characters_style', '');
-ini_set('captcha.fake_characters_color', CSSCaptcha::LIGHT);
-ini_set('captcha.significant_characters_color', CSSCaptcha::BLUE);
+// ini_set('captcha.fake_characters_style', '');
+// ini_set('captcha.fake_characters_color', CSSCaptcha::LIGHT);
+// ini_set('captcha.significant_characters_color', CSSCaptcha::BLUE);
 
 header('Content-Type: text/html; charset=utf-8');
 session_start();
@@ -18,6 +18,9 @@ define('KEY', pathinfo(__FILE__, PATHINFO_FILENAME));
 
 if (isset($_POST['captcha'])) {
     $captcha = new CSSCaptcha(KEY);
+    $catpcha->setAttribute(CSSCaptcha::FAKE_CHARACTERS_STYLE, '');
+    $catpcha->setAttribute(CSSCaptcha::FAKE_CHARACTERS_COLOR, CSSCaptcha::LIGHT);
+    $catpcha->setAttribute(CSSCaptcha::SIGNIFICANT_CHARACTERS_COLOR, CSSCaptcha::BLUE);
     if ($captcha->validate($_POST['captcha'])) {
         $captcha->renew();
         echo '<p>You pass. New token created.</p>';
