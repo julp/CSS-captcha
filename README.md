@@ -30,9 +30,9 @@ Notes:
 * does user input match current challenge (case insensitive and internal counter for attempts incremented): `boolean captcha_validate(object $captcha, string $input) or boolean CSSCaptcha::validate(string $input)`
 * renew challenge: `void captcha_renew(object $captcha) or void CSSCaptcha::renew()`
 * cleanup session (remove session key): `void captcha_cleanup(object $captcha) or void CSSCaptcha::cleanup()`
-* get initial key associated to the captcha: `string captcha_get_key(object $captcha) or string CSSCaptcha::get_key()`
-* get current challenge: `string captcha_get_challenge(object $captcha) or string CSSCaptcha::get_challenge()`
-* get the number of attempts: `integer captcha_get_attempts(object $captcha) or integer CSSCaptcha::get_attempts()`
+* get initial key associated to the captcha: `string captcha_get_key(object $captcha) or string CSSCaptcha::getKey()`
+* get current challenge: `string captcha_get_challenge(object $captcha) or string CSSCaptcha::getChallenge()`
+* get the number of attempts: `integer captcha_get_attempts(object $captcha) or integer CSSCaptcha::getAttempts()`
 * get current value of an attribute: `mixed captcha_get_attribute(object $captcha, int $attribute) or mixed CSSCaptcha::getAttribute(int $attribute)`
 * set value for an attribute: `mixed captcha_set_attribute(object $captcha, int $attribute, mixed $value) or mixed CSSCaptcha::setAttribute(int $attribute, mixed $value)`
 
@@ -59,8 +59,8 @@ $options = array(
     CSSCaptcha::ATTR_SIGNIFICANT_CHARACTERS_COLOR => CSSCaptcha::COLOR_BLUE,
 );
 
+$captcha = new CSSCaptcha(KEY, $options);
 if (isset($_POST['captcha'])) {
-    $captcha = new CSSCaptcha(KEY, $options);
     if ($captcha->validate($_POST['captcha'])) {
         $captcha->renew();
         echo '<p>You pass. New token created.</p>';
@@ -70,8 +70,6 @@ if (isset($_POST['captcha'])) {
     } else {
         echo '<p>You fail.</p>';
     }
-} else  {
-    $captcha = new CSSCaptcha(KEY, $options);
 }
 ?>
         <form method="post" action="">
