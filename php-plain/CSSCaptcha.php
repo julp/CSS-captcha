@@ -14,6 +14,7 @@ class CSSCaptcha {
     const ATTR_ONLY_LTR = __LINE__;
     const ATTR_NOISE_LENGTH = __LINE__;
     const ATTR_SESSION_PREFIX = __LINE__;
+//     const ATTR_UNICODE_VERSION = __LINE__;
     const ATTR_CHALLENGE_LENGTH = __LINE__;
     const ATTR_FAKE_CHARACTERS_COLOR = __LINE__;
     const ATTR_FAKE_CHARACTERS_STYLE = __LINE__;
@@ -368,6 +369,14 @@ class CSSCaptcha {
 
     const ALPHABET = '0123456789abcdefghijklmnopqrstuvwxyz';
 
+    private static $colors = array(
+        self::COLOR_RED => array(0, 30, 75, 100, 40, 60),
+        self::COLOR_GREEN => array(90, 120, 75, 100, 40, 60),
+        self::COLOR_BLUE => array(210, 240, 75, 100, 40, 60),
+        self::COLOR_LIGHT => array(0, 359, 0, 50, 92, 100),
+        self::COLOR_DARK => array(0, 359, 0, 100, 0, 6),
+    );
+
     protected function generateChallenge()
     {
         $token = str_repeat(' ', $this->_attributes[self::ATTR_FAKE_CHARACTERS_LENGTH]);
@@ -396,6 +405,58 @@ class CSSCaptcha {
         }
     }
 
+    protected static function hue_to_rgb($m1, $m2, $h)
+    {
+        if ($h < 0) {
+            $h += 360;
+        }
+        if ($h > 360) {
+            $h -= 360;
+        }
+        if ($h < 60) {
+            return ($m1 + ($m2 - $m1) * ($h / 60.0)) * 255.5;
+        }
+        if ($h < 180) {
+            return ($m2 * 255.5);
+        }
+        if ($h < 240) {
+            return ($m1 + ($m2 - $m1) * ((240 - $h) / 60.0)) * 255.5;
+        }
+
+        return $m1 * 255.5;
+    }
+
+    protected static function hsl_to_rgb($h, $s, $l)
+    {
+        if ($l == 0) {
+            $r = $g = $b = 0;
+        } else {
+            $s /= 100;
+            $l /= 100;
+            if ($l <= 0.5) {
+                $m2 = $l * ($s + 1);
+            } else {
+                $m2 = $l + $s - $l * $s;
+            }
+            $m1 = $l * 2 - $m2;
+            $r = self::hue_to_rgb($m1, $m2, $h + 120);
+            $g = self::hue_to_rgb($m1, $m2, $h);
+            $b = self::hue_to_rgb($m1, $m2, $h - 120);
+        }
+
+        return array($r, $g, $b);
+    }
+
+    protected function setColor($is_significant)
+    {
+        if ($color_key = $this->_attributes[$is_significant ? CSSCaptcha::ATTR_SIGNIFICANT_CHARACTERS_COLOR : CSSCaptcha::ATTR_FAKE_CHARACTERS_COLOR]) {
+            $color = self::$colors[$color_key];
+            return vsprintf('color: #%02X%02X%02X; ', self::hsl_to_rgb(rand($color[0], $color[1]), rand($color[2], $color[3]), rand($color[4], $color[5])));
+        } else {
+            return '';
+        }
+    }
+
     private static function checkActiveSession() {
         if (function_exists('session_status') && PHP_SESSION_ACTIVE != session_status()) {
             throw new Exception('CSSCaptcha implies an active session');
@@ -417,7 +478,7 @@ class CSSCaptcha {
                 || !is_int($_SESSION[$this->_attributes[self::ATTR_SESSION_PREFIX] . $key]['attempts'])
                 || !is_string($_SESSION[$this->_attributes[self::ATTR_SESSION_PREFIX] . $key]['challenge'])
                 || !$_SESSION[$this->_attributes[self::ATTR_SESSION_PREFIX] . $key]['challenge']
-                || !preg_match('.^[' . preg_quote(self::ALPHABET) . ']*$.D', $_SESSION[$this->_attributes[self::ATTR_SESSION_PREFIX] . $key]['challenge'])
+                || !preg_match('.^[ ' . preg_quote(self::ALPHABET) . ']*$.D', $_SESSION[$this->_attributes[self::ATTR_SESSION_PREFIX] . $key]['challenge'])
             ) {
                 $this->renew();
             } else {
@@ -458,7 +519,7 @@ class CSSCaptcha {
                     $p = intval($challenge[$i], 36);
                     $fake = FALSE;
                 }
-                $ret .= '#captcha span:nth-child(' . ($i + 1) . '):after { content: "' . $this->generateIgnorables() . '\\' . self::$_tables[$p][array_rand(self::$_tables[$p])] . $this->generateIgnorables() . '"; ' . ($fake ? '' : $this->_attributes[self::ATTR_SIGNIFICANT_CHARACTERS_STYLE]) . ' }' . "\n";
+                $ret .= '#captcha span:nth-child(' . ($i + 1) . '):after { content: "' . $this->generateIgnorables() . '\\' . self::$_tables[$p][array_rand(self::$_tables[$p])] . $this->generateIgnorables() . '"; ' . ($fake ? '' : $this->_attributes[self::ATTR_SIGNIFICANT_CHARACTERS_STYLE]) . $this->setColor(!$fake) . ' }' . "\n";
             }
             if ($what & self::RENDER_HTML) {
                 $ret .= '</style>';
@@ -526,7 +587,7 @@ class CSSCaptcha {
     public function setAttribute($attribute, $value)
     {
         if (array_key_exists($attribute, $this->_attributes)) {
-            if (in_array($attribute, array(self::ATTR_FAKE_CHARACTERS_COLOR, self::ATTR_SIGNIFICANT_CHARACTERS_COLOR))) {
+            if (in_array($attribute, array(self::ATTR_FAKE_CHARACTERS_COLOR, self::ATTR_SIGNIFICANT_CHARACTERS_COLOR)) && !array_key_exists($value, self::$colors)) {
                 return FALSE;
             }
             $this->_attributes[$attribute] = $value;
