@@ -1222,17 +1222,17 @@ static double hue_to_rgb(double m1, double m2, uint16_t h)
     if (h < 240) {
         return (m1 + (m2 - m1) * ((240 - h) / 60.0)) * 255.5;
     }
+
     return m1 * 255.5;
 }
 
-static void hsl_to_rgb(uint16_t _h, uint8_t _s, uint8_t _l, uint8_t *r, uint8_t *g, uint8_t *b)
+static void hsl_to_rgb(uint16_t h, uint8_t _s, uint8_t _l, uint8_t *r, uint8_t *g, uint8_t *b)
 {
-    double h, s, l, m1, m2;
+    double s, l, m1, m2;
 
     if (_l == 0) {
         *r = *g = *b = 0;
     } else {
-        h = _h / 360.0;
         s = _s / 100.0;
         l = _l / 100.0;
         if (l <= 0.5) {
@@ -1241,9 +1241,9 @@ static void hsl_to_rgb(uint16_t _h, uint8_t _s, uint8_t _l, uint8_t *r, uint8_t 
             m2 = l + s - l * s;
         }
         m1 = l * 2 - m2;
-        *r = hue_to_rgb(m1, m2, _h + 120);
-        *g = hue_to_rgb(m1, m2, _h);
-        *b = hue_to_rgb(m1, m2, _h - 120);
+        *r = hue_to_rgb(m1, m2, h + 120);
+        *g = hue_to_rgb(m1, m2, h);
+        *b = hue_to_rgb(m1, m2, h - 120);
     }
 }
 
