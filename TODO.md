@@ -22,6 +22,6 @@ CSS obfuscation:
 
 php-plain:
 * [ ] missing checks on \*\_length attributes
-* [ ] fake characters are not kept
+* [x] fake characters are not kept
 * [ ] external files for serialized tables
 * [x] colors

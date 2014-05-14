@@ -11,6 +11,7 @@ class CSSCaptcha {
     const COLOR_DARK = __LINE__;
     const COLOR_LIGHT = __LINE__;
 
+//     const ATTR_ALPHABET = __LINE__;
     const ATTR_ONLY_LTR = __LINE__;
     const ATTR_NOISE_LENGTH = __LINE__;
     const ATTR_SESSION_PREFIX = __LINE__;
@@ -352,6 +353,7 @@ class CSSCaptcha {
     );
 
     protected $_key;
+    protected $_fakes;
     protected $_challenge;
     protected $_attempts = 0;
 
@@ -369,6 +371,9 @@ class CSSCaptcha {
 
     const ALPHABET = '0123456789abcdefghijklmnopqrstuvwxyz';
 
+    const UNINITIALIZED_CHAR = 0x81;
+    const UNSIGNIFICANT_CHAR = 0x82;
+
     private static $colors = array(
         self::COLOR_RED => array(0, 30, 75, 100, 40, 60),
         self::COLOR_GREEN => array(90, 120, 75, 100, 40, 60),
@@ -379,14 +384,21 @@ class CSSCaptcha {
 
     protected function generateChallenge()
     {
-        $token = str_repeat(' ', $this->_attributes[self::ATTR_FAKE_CHARACTERS_LENGTH]);
+        $this->_fakes = array();
+        if ($this->_attributes[self::ATTR_FAKE_CHARACTERS_LENGTH]) {
+            $index = range(0, $this->_attributes[self::ATTR_CHALLENGE_LENGTH]);
+            shuffle($index);
+            for ($i = 0; $i < $this->_attributes[self::ATTR_FAKE_CHARACTERS_LENGTH]; $i++) {
+                $this->_fakes[$index[$i]] = substr(self::ALPHABET, rand(0, strlen(self::ALPHABET) - 1), 1);
+            }
+        }
+        $this->_challenge = '';
         for ($i = 0; $i < $this->_attributes[self::ATTR_CHALLENGE_LENGTH]; $i++) {
             // can't use: $token .= self::ALPHABET[rand(0, strlen(self::ALPHABET) - 1)]; ?!?
-            $token .= substr(self::ALPHABET, rand(0, strlen(self::ALPHABET) - 1), 1);
+            $this->_challenge .= substr(self::ALPHABET, rand(0, strlen(self::ALPHABET) - 1), 1);
         }
-        $token = str_shuffle($token);
 
-        return $token;
+        return $this->_challenge;
     }
 
     protected function generateIgnorables()
@@ -478,10 +490,11 @@ class CSSCaptcha {
                 || !is_int($_SESSION[$this->_attributes[self::ATTR_SESSION_PREFIX] . $key]['attempts'])
                 || !is_string($_SESSION[$this->_attributes[self::ATTR_SESSION_PREFIX] . $key]['challenge'])
                 || !$_SESSION[$this->_attributes[self::ATTR_SESSION_PREFIX] . $key]['challenge']
-                || !preg_match('.^[ ' . preg_quote(self::ALPHABET) . ']*$.D', $_SESSION[$this->_attributes[self::ATTR_SESSION_PREFIX] . $key]['challenge'])
+                || !preg_match('.^[' . preg_quote(self::ALPHABET) . ']*$.D', $_SESSION[$this->_attributes[self::ATTR_SESSION_PREFIX] . $key]['challenge'])
             ) {
                 $this->renew();
             } else {
+                $this->_fakes = &$_SESSION[$this->_attributes[self::ATTR_SESSION_PREFIX] . $this->_key]['fakes'];
                 $this->_attempts = &$_SESSION[$this->_attributes[self::ATTR_SESSION_PREFIX] . $this->_key]['attempts'];
                 $this->_challenge = &$_SESSION[$this->_attributes[self::ATTR_SESSION_PREFIX] . $this->_key]['challenge'];
             }
@@ -490,9 +503,35 @@ class CSSCaptcha {
         }
     }
 
+    protected function generateChar(/*&$ret,*/ $index, $character, $significant)
+    {
+        $p = intval($character, strlen(self::ALPHABET));
+        $ret = '#captcha span:nth-child(';
+        if (rand(0, 1)) {
+            $ret .= '0n+';
+        }
+        $ret .= $index + 1;
+        $ret .= '):after { content: "';
+        $ret .= $this->generateIgnorables();
+        $ret .= '\\';
+        $ret .= self::$_tables[$p][array_rand(self::$_tables[$p])];
+        $ret .= $this->generateIgnorables();
+        $ret .= '"; ';
+        $ret .= $this->setColor($significant);
+        if ($significant) {
+            $ret .= $this->_attributes[self::ATTR_SIGNIFICANT_CHARACTERS_STYLE];
+        } else {
+            $ret .= $this->_attributes[self::ATTR_FAKE_CHARACTERS_STYLE];
+        }
+        $ret .= " }\n";
+
+        return $ret;
+    }
+
     public function render($what = 0x11/*self::RENDER_CSS | self::RENDER_HTML*/)
     {
         $ret = '';
+        $total_len = strlen($this->_challenge) + count($this->_fakes);
 
         $rtl = ($what == self::RENDER_CSS | self::RENDER_HTML) && !$this->_attributes[self::ATTR_ONLY_LTR] && rand(0, 1); # TODO: remove $what == self::RENDER_CSS | self::RENDER_HTML test, implies to move "$rtl" to a higher "scope" (session and/or attribute)
 
@@ -500,26 +539,33 @@ class CSSCaptcha {
             if ($what & self::RENDER_HTML) {
                 $ret .= '<style type="text/css">';
             }
+            $index = range(0, $total_len - 1);
+            shuffle($index);
+            if ($this->_fakes) {
+                $map = array_fill(0, $total_len, self::UNINITIALIZED_CHAR);
+                foreach ($this->_fakes as $k => $v) {
+                    $map[$k] = self::UNSIGNIFICANT_CHAR;
+                }
+                for ($i = $j = 0; $i < strlen($this->_challenge); $j++) {
+                    if (self::UNINITIALIZED_CHAR == $map[$j]) {
+                        $map[$j] = $i++;
+                    }
+                }
+            } else {
+                $map = range(0, $total_len - 1);
+            }
             if ($rtl) {
                 $ret .= '#captcha { float: left; /*position: absolute; left: 0;*/ height: auto; overflow: hidden; zoom: 1; }' . "\n";
                 $ret .= '#captcha span { float: right; }' . "\n";
                 $ret .= '#captcha:after { content: "."; visibility: hidden; display: block; height: 0; clear: both; }' . "\n";
-                $challenge = strrev($this->_challenge);
-            } else {
-                $challenge = $this->_challenge;
+                $map = array_reverse($map);
             }
-            $index = range(0, strlen($this->_challenge) - 1);
-            shuffle($index);
-            foreach ($index as $i) {
-                if ($challenge[$i] == ' ') {
-                    $ret .= '#captcha span:nth-child(' . ($i + 1) . ') { ' . $this->_attributes[self::ATTR_FAKE_CHARACTERS_STYLE] . ' }' . "\n";
-                    $p = rand(0, strlen(self::ALPHABET) - 1);
-                    $fake = TRUE;
+            for ($i = 0; $i < $total_len; $i++) {
+                if (self::UNSIGNIFICANT_CHAR == $map[$index[$i]]) {
+                    $ret .= $this->generateChar($index[$i], $this->_fakes[$rtl ? $total_len - 1 - $index[$i] : $index[$i]], FALSE);
                 } else {
-                    $p = intval($challenge[$i], 36);
-                    $fake = FALSE;
+                    $ret .= $this->generateChar($index[$i], $this->_challenge[$map[$index[$i]]], TRUE);
                 }
-                $ret .= '#captcha span:nth-child(' . ($i + 1) . '):after { content: "' . $this->generateIgnorables() . '\\' . self::$_tables[$p][array_rand(self::$_tables[$p])] . $this->generateIgnorables() . '"; ' . ($fake ? '' : $this->_attributes[self::ATTR_SIGNIFICANT_CHARACTERS_STYLE]) . $this->setColor(!$fake) . ' }' . "\n";
             }
             if ($what & self::RENDER_HTML) {
                 $ret .= '</style>';
@@ -527,7 +573,7 @@ class CSSCaptcha {
         }
 
         if ($what & self::RENDER_HTML) {
-            $ret .= '<div id="captcha">' . str_repeat('<span></span>', strlen($this->_challenge)) . '</div>';
+            $ret .= '<div id="captcha">' . str_repeat('<span></span>', $total_len) . '</div>';
         }
 
         return $ret;
@@ -536,7 +582,7 @@ class CSSCaptcha {
     public function validate($user_input)
     {
         ++$this->_attempts;
-        return str_replace(' ', '', $this->_challenge) === $user_input;
+        return $this->_challenge === $user_input;
     }
 
     public function cleanup()
@@ -554,10 +600,13 @@ class CSSCaptcha {
         # $_SESSION[$this->_attributes[self::ATTR_SESSION_PREFIX] . $this->_key] may be not yet "initialized"
         $_SESSION[$this->_attributes[self::ATTR_SESSION_PREFIX] . $this->_key] = array(
             'attempts'  => 0,
-            'challenge' => $this->generateChallenge(),
+            'challenge' => '',
+            'fakes'     => array(),
         );
+        $this->_fakes = &$_SESSION[$this->_attributes[self::ATTR_SESSION_PREFIX] . $this->_key]['fakes'];
         $this->_attempts = &$_SESSION[$this->_attributes[self::ATTR_SESSION_PREFIX] . $this->_key]['attempts'];
         $this->_challenge = &$_SESSION[$this->_attributes[self::ATTR_SESSION_PREFIX] . $this->_key]['challenge'];
+        $this->generateChallenge();
     }
 
     public function getKey()
@@ -567,7 +616,7 @@ class CSSCaptcha {
 
     public function getChallenge()
     {
-        return str_replace(' ', '', $this->_challenge);
+        return $this->_challenge;
     }
 
     public function getAttempts()
