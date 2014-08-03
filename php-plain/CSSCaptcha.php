@@ -20,6 +20,7 @@ class CSSCaptcha {
     const ATTR_FAKE_CHARACTERS_COLOR = __LINE__;
     const ATTR_FAKE_CHARACTERS_STYLE = __LINE__;
     const ATTR_FAKE_CHARACTERS_LENGTH = __LINE__;
+    const ATTR_SKIP_UNICODE_FOR_CHALLENGE = __LINE__;
     const ATTR_SIGNIFICANT_CHARACTERS_COLOR = __LINE__;
     const ATTR_SIGNIFICANT_CHARACTERS_STYLE = __LINE__;
 
@@ -346,7 +347,7 @@ class CSSCaptcha {
     );
 
     protected static $_ignorables = array(
-        '\0009', '\000A', '\000C', '\000D', '\0020', '\00A0',
+        /*'\0009', '\000A', '\000C', '\000D',*/ '\0020', '\00A0',
         '\1680', '\180E', '\2000', '\2001', '\2002', '\2003',
         '\2004', '\2005', '\2006', '\2007', '\2008', '\2009',
         '\200A', '\2028', '\2029', '\202F', '\205F', '\3000',
@@ -366,6 +367,7 @@ class CSSCaptcha {
         self::ATTR_FAKE_CHARACTERS_STYLE => 'display: none;',
         self::ATTR_FAKE_CHARACTERS_COLOR => self::COLOR_NONE,
         self::ATTR_SIGNIFICANT_CHARACTERS_STYLE => '',
+        self::ATTR_SKIP_UNICODE_FOR_CHALLENGE => FALSE,
         self::ATTR_SIGNIFICANT_CHARACTERS_COLOR => self::COLOR_NONE,
     );
 
@@ -514,7 +516,11 @@ class CSSCaptcha {
         $ret .= '):after { content: "';
         $ret .= $this->generateIgnorables();
         $ret .= '\\';
-        $ret .= self::$_tables[$p][array_rand(self::$_tables[$p])];
+        if ($this->_attributes[self::ATTR_SKIP_UNICODE_FOR_CHALLENGE]) {
+            $ret .= sprintf('%04X', ord($character));
+        } else {
+            $ret .= self::$_tables[$p][array_rand(self::$_tables[$p])];
+        }
         $ret .= $this->generateIgnorables();
         $ret .= '"; ';
         $ret .= $this->setColor($significant);
