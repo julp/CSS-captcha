@@ -32,7 +32,6 @@ window.onload = function() {
     var s = '';
     var l = document.querySelectorAll('#captcha > span');
     for (var i = 0; i < l.length; i++) {
-        console.log(getComputedStyle(l[i], ':after').content);
         s += getComputedStyle(l[i], ':after').content.replace(/[^a-z\d]/gi, '');
     }
     var input = document.querySelector('input[name="captcha"]');
