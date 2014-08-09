@@ -14,6 +14,8 @@ typedef struct {
     zval *challenge;
     zval *attempts;
     zval *fakes;
+# define BOOL_CAPTCHA_ATTRIBUTE(member, name) \
+    zend_bool member;
 # define LONG_CAPTCHA_ATTRIBUTE(member, name, cb) \
     long member;
 # define STRING_CAPTCHA_ATTRIBUTE(member, name, cb) \
