@@ -22,6 +22,7 @@ typedef struct {
     char *member; \
     int *member##_len;
 # include "captcha_attributes.h"
+#undef BOOL_CAPTCHA_ATTRIBUTE
 # undef LONG_CAPTCHA_ATTRIBUTE
 # undef STRING_CAPTCHA_ATTRIBUTE
 } Captcha_object;
