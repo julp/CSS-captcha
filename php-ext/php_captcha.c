@@ -60,11 +60,11 @@
     co->member
 
 enum {
-#define BOOL_CAPTCHA_ATTRIBUTE(member, name) \
+#define BOOL_CAPTCHA_ATTRIBUTE(member, name, defaultvalue) \
     CAPTCHA_ATTR_PREFIX(name),
-#define LONG_CAPTCHA_ATTRIBUTE(member, name, cb) \
+#define LONG_CAPTCHA_ATTRIBUTE(member, name, defaultvalue, cb) \
     CAPTCHA_ATTR_PREFIX(name),
-#define STRING_CAPTCHA_ATTRIBUTE(member, name, cb) \
+#define STRING_CAPTCHA_ATTRIBUTE(member, name, defaultvalue, cb) \
     CAPTCHA_ATTR_PREFIX(name),
 #include "captcha_attributes.h"
 #undef BOOL_CAPTCHA_ATTRIBUTE
@@ -82,11 +82,11 @@ struct captcha_attribute_t {
     size_t offset;
     int (*cb)(zval * TSRMLS_DC);
 } static attributes[] = {
-#define BOOL_CAPTCHA_ATTRIBUTE(member, name) \
+#define BOOL_CAPTCHA_ATTRIBUTE(member, name, defaultvalue) \
     { offsetof(Captcha_object, member), cb },
-#define LONG_CAPTCHA_ATTRIBUTE(member, name, cb) \
+#define LONG_CAPTCHA_ATTRIBUTE(member, name, defaultvalue, cb) \
     { offsetof(Captcha_object, member), cb },
-#define STRING_CAPTCHA_ATTRIBUTE(member, name, cb) \
+#define STRING_CAPTCHA_ATTRIBUTE(member, name, defaultvalue, cb) \
     { offsetof(Captcha_object, member), cb },
 #include "captcha_attributes.h"
 #undef BOOL_CAPTCHA_ATTRIBUTE
@@ -1077,10 +1077,10 @@ static int check_zero_or_positive_attribute(zval *value TSRMLS_DC)
 static long captcha_set_attribute(Captcha_object* co, ulong attribute, zval **value TSRMLS_DC)
 {
     switch (attribute) {
-#define BOOL_CAPTCHA_ATTRIBUTE(member, name) \
+#define BOOL_CAPTCHA_ATTRIBUTE(member, name, defaultvalue) \
         case CAPTCHA_ATTR_PREFIX(name):
-#define LONG_CAPTCHA_ATTRIBUTE(member, name, cb)
-#define STRING_CAPTCHA_ATTRIBUTE(member, name, cb)
+#define LONG_CAPTCHA_ATTRIBUTE(member, name, defaultvalue, cb)
+#define STRING_CAPTCHA_ATTRIBUTE(member, name, defaultvalue, cb)
 #include "captcha_attributes.h"
 #undef BOOL_CAPTCHA_ATTRIBUTE
 #undef LONG_CAPTCHA_ATTRIBUTE
@@ -1090,10 +1090,10 @@ static long captcha_set_attribute(Captcha_object* co, ulong attribute, zval **va
             *((zend_bool *) (((char *) co) + attributes[attribute].offset)) = Z_BVAL_PP(value);
             return 1;
         }
-#define BOOL_CAPTCHA_ATTRIBUTE(member, name)
-#define LONG_CAPTCHA_ATTRIBUTE(member, name, cb) \
+#define BOOL_CAPTCHA_ATTRIBUTE(member, name, defaultvalue)
+#define LONG_CAPTCHA_ATTRIBUTE(member, name, defaultvalue, cb) \
         case CAPTCHA_ATTR_PREFIX(name):
-#define STRING_CAPTCHA_ATTRIBUTE(member, name, cb)
+#define STRING_CAPTCHA_ATTRIBUTE(member, name, defaultvalue, cb)
 #include "captcha_attributes.h"
 #undef BOOL_CAPTCHA_ATTRIBUTE
 #undef LONG_CAPTCHA_ATTRIBUTE
@@ -1106,9 +1106,9 @@ static long captcha_set_attribute(Captcha_object* co, ulong attribute, zval **va
             }
             break;
         }
-#define BOOL_CAPTCHA_ATTRIBUTE(member, name)
-#define LONG_CAPTCHA_ATTRIBUTE(member, name, cb)
-#define STRING_CAPTCHA_ATTRIBUTE(member, name, cb) \
+#define BOOL_CAPTCHA_ATTRIBUTE(member, name, defaultvalue)
+#define LONG_CAPTCHA_ATTRIBUTE(member, name, defaultvalue, cb)
+#define STRING_CAPTCHA_ATTRIBUTE(member, name, defaultvalue, cb) \
         case CAPTCHA_ATTR_PREFIX(name):
 #include "captcha_attributes.h"
 #undef BOOL_CAPTCHA_ATTRIBUTE
@@ -1143,14 +1143,16 @@ static void captcha_ctor(INTERNAL_FUNCTION_PARAMETERS)
         RETURN_NULL();
     }
     co = (Captcha_object *) zend_object_store_get_object(object TSRMLS_CC);
-    co->challenge_length = 8;
-    co->fake_characters_length = 2;
-    co->noise_length = 2;
-    co->session_prefix = estrdup("captcha_");
-    co->fake_characters_style = estrdup("display: none");
-    co->significant_characters_style = estrndup("", 0);
-    co->fake_characters_color = 0;
-    co->significant_characters_color = 0;
+#define BOOL_CAPTCHA_ATTRIBUTE(member, name, defaultvalue) \
+    co->member = defaultvalue;
+#define LONG_CAPTCHA_ATTRIBUTE(member, name, defaultvalue, cb) \
+    co->member = defaultvalue;
+#define STRING_CAPTCHA_ATTRIBUTE(member, name, defaultvalue, cb) \
+    co->member = estrndup(defaultvalue, co->member##_len = STR_LEN(defaultvalue));
+#include "captcha_attributes.h"
+#undef BOOL_CAPTCHA_ATTRIBUTE
+#undef LONG_CAPTCHA_ATTRIBUTE
+#undef STRING_CAPTCHA_ATTRIBUTE
     if (options) {
         char *str_key;
         ulong long_key;
@@ -1308,7 +1310,12 @@ static void generate_char(smart_str *ret, Captcha_object *co, long index, char c
     long noise, p;
     const char *e;
 
-    smart_str_append_static(ret, "#captcha span:nth-child(");
+//     smart_str_append_static(ret, "#captcha span:nth-child(");
+    smart_str_appendc(ret, '#');
+    smart_str_appendl(ret, co->html_wrapper_id, co->html_wrapper_id_len);
+    smart_str_appendc(ret, ' ');
+    smart_str_appendl(ret, co->html_letter_tag, co->html_letter_tag_len);
+    smart_str_append_static(ret, ":nth-child(");
     if (captcha_rand(1 TSRMLS_CC)) {
         smart_str_append_static(ret, "0n+");
     }
@@ -1354,6 +1361,7 @@ static void generate_char(smart_str *ret, Captcha_object *co, long index, char c
 #define UNSIGNIFICANT_CHAR 0x82
 PHP_FUNCTION(captcha_render)
 {
+    long i;
     zval *object = NULL;
     smart_str ret = { 0 };
     Captcha_object *co = NULL;
@@ -1370,7 +1378,6 @@ PHP_FUNCTION(captcha_render)
         total_len = Z_STRLEN_P(co->challenge) + zend_hash_num_elements(Z_ARRVAL_P(co->fakes));
     }
     if (what & CAPTCHA_RENDER_CSS) {
-        long i;
         unsigned char index[ARRAY_SIZE(shuffling)], map[ARRAY_SIZE(shuffling)];
 
         if (what & CAPTCHA_RENDER_HTML) {
@@ -1415,9 +1422,24 @@ PHP_FUNCTION(captcha_render)
     }
 
     if (what & CAPTCHA_RENDER_HTML) {
-        smart_str_append_static(&ret, "<div id=\"captcha\">");
-        smart_str_append_static_repeated(&ret, total_len, "<span></span>");
-        smart_str_append_static(&ret, "</div>");
+//         smart_str_append_static(&ret, "<div id=\"captcha\">");
+        smart_str_appendc(&ret, '<');
+        smart_str_appendl(&ret, co->html_wrapper_tag, co->html_wrapper_tag_len);
+        smart_str_append_static(&ret, " id=\"");
+        smart_str_appendl(&ret, co->html_wrapper_id, co->html_wrapper_id_len);
+        smart_str_append_static(&ret, "\">");
+//         smart_str_append_static_repeated(&ret, total_len, "<span></span>");
+        for (i = 0; i < total_len; i++) {
+            smart_str_appendc(&ret, '<');
+            smart_str_appendl(&ret, co->html_letter_tag, co->html_letter_tag_len);
+            smart_str_append_static(&ret, "></");
+            smart_str_appendl(&ret, co->html_letter_tag, co->html_letter_tag_len);
+            smart_str_appendc(&ret, '>');
+        }
+//         smart_str_append_static(&ret, "</div>");
+        smart_str_append_static(&ret, "</");
+        smart_str_appendl(&ret, co->html_wrapper_tag, co->html_wrapper_tag_len);
+        smart_str_appendc(&ret, '>');
     }
 
     if (0 == ret.len) {
@@ -1509,10 +1531,10 @@ PHP_FUNCTION(captcha_get_attribute)
     }
     CAPTCHA_FETCH_OBJ(co, object);
     switch (attr) {
-#define BOOL_CAPTCHA_ATTRIBUTE(member, name) \
+#define BOOL_CAPTCHA_ATTRIBUTE(member, name, defaultvalue) \
         case CAPTCHA_ATTR_PREFIX(name):
-#define LONG_CAPTCHA_ATTRIBUTE(member, name, cb)
-#define STRING_CAPTCHA_ATTRIBUTE(member, name, cb)
+#define LONG_CAPTCHA_ATTRIBUTE(member, name, defaultvalue, cb)
+#define STRING_CAPTCHA_ATTRIBUTE(member, name, defaultvalue, cb)
 #include "captcha_attributes.h"
 #undef BOOL_CAPTCHA_ATTRIBUTE
 #undef LONG_CAPTCHA_ATTRIBUTE
@@ -1520,10 +1542,10 @@ PHP_FUNCTION(captcha_get_attribute)
         {
             RETURN_BOOL(*((zend_bool *) (((char *) co) + attributes[attr].offset)));
         }
-#define BOOL_CAPTCHA_ATTRIBUTE(member, name)
-#define LONG_CAPTCHA_ATTRIBUTE(member, name, cb) \
+#define BOOL_CAPTCHA_ATTRIBUTE(member, name, defaultvalue)
+#define LONG_CAPTCHA_ATTRIBUTE(member, name, defaultvalue, cb) \
         case CAPTCHA_ATTR_PREFIX(name):
-#define STRING_CAPTCHA_ATTRIBUTE(member, name, cb)
+#define STRING_CAPTCHA_ATTRIBUTE(member, name, defaultvalue, cb)
 #include "captcha_attributes.h"
 #undef BOOL_CAPTCHA_ATTRIBUTE
 #undef LONG_CAPTCHA_ATTRIBUTE
@@ -1531,9 +1553,9 @@ PHP_FUNCTION(captcha_get_attribute)
         {
             RETURN_LONG(*((long *) (((char *) co) + attributes[attr].offset)));
         }
-#define BOOL_CAPTCHA_ATTRIBUTE(member, name)
-#define LONG_CAPTCHA_ATTRIBUTE(member, name, cb)
-#define STRING_CAPTCHA_ATTRIBUTE(member, name, cb) \
+#define BOOL_CAPTCHA_ATTRIBUTE(member, name, defaultvalue)
+#define LONG_CAPTCHA_ATTRIBUTE(member, name, defaultvalue, cb)
+#define STRING_CAPTCHA_ATTRIBUTE(member, name, defaultvalue, cb) \
         case CAPTCHA_ATTR_PREFIX(name):
 #include "captcha_attributes.h"
 #undef BOOL_CAPTCHA_ATTRIBUTE
@@ -1672,9 +1694,9 @@ static void Captcha_objects_free(zend_object *object TSRMLS_DC)
 
     zend_object_std_dtor(&co->zo TSRMLS_CC);
 
-#define BOOL_CAPTCHA_ATTRIBUTE(member, name)
-#define LONG_CAPTCHA_ATTRIBUTE(member, name, cb)
-#define STRING_CAPTCHA_ATTRIBUTE(member, name, cb) \
+#define BOOL_CAPTCHA_ATTRIBUTE(member, name, defaultvalue)
+#define LONG_CAPTCHA_ATTRIBUTE(member, name, defaultvalue, cb)
+#define STRING_CAPTCHA_ATTRIBUTE(member, name, defaultvalue, cb) \
         if (NULL != co->member) { \
             efree(co->member); \
         }
@@ -1726,11 +1748,11 @@ static PHP_MINIT_FUNCTION(captcha)
 #undef CAPTCHA_COLOR
 
 // printf("%s %d\n", "ATTR_" #name, STR_LEN("ATTR_" #name));
-#define BOOL_CAPTCHA_ATTRIBUTE(member, name) \
+#define BOOL_CAPTCHA_ATTRIBUTE(member, name, defaultvalue) \
     zend_declare_class_constant_long(Captcha_ce_ptr, "ATTR_" #name, STR_LEN("ATTR_" #name), CAPTCHA_ATTR_PREFIX(name) TSRMLS_CC);
-# define LONG_CAPTCHA_ATTRIBUTE(member, name, cb) \
+# define LONG_CAPTCHA_ATTRIBUTE(member, name, defaultvalue, cb) \
     zend_declare_class_constant_long(Captcha_ce_ptr, "ATTR_" #name, STR_LEN("ATTR_" #name), CAPTCHA_ATTR_PREFIX(name) TSRMLS_CC);
-# define STRING_CAPTCHA_ATTRIBUTE(member, name, cb) \
+# define STRING_CAPTCHA_ATTRIBUTE(member, name, defaultvalue, cb) \
     zend_declare_class_constant_long(Captcha_ce_ptr, "ATTR_" #name, STR_LEN("ATTR_" #name), CAPTCHA_ATTR_PREFIX(name) TSRMLS_CC);
 # include "captcha_attributes.h"
 # undef LONG_CAPTCHA_ATTRIBUTE

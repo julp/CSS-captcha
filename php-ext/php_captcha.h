@@ -14,13 +14,13 @@ typedef struct {
     zval *challenge;
     zval *attempts;
     zval *fakes;
-# define BOOL_CAPTCHA_ATTRIBUTE(member, name) \
+# define BOOL_CAPTCHA_ATTRIBUTE(member, name, defaultvalue) \
     zend_bool member;
-# define LONG_CAPTCHA_ATTRIBUTE(member, name, cb) \
+# define LONG_CAPTCHA_ATTRIBUTE(member, name, defaultvalue, cb) \
     long member;
-# define STRING_CAPTCHA_ATTRIBUTE(member, name, cb) \
+# define STRING_CAPTCHA_ATTRIBUTE(member, name, defaultvalue, cb) \
     char *member; \
-    int *member##_len;
+    int member##_len;
 # include "captcha_attributes.h"
 #undef BOOL_CAPTCHA_ATTRIBUTE
 # undef LONG_CAPTCHA_ATTRIBUTE

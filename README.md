@@ -18,6 +18,9 @@ Run dependency: nothing you should already have (only PHP's session extension, n
 * CSSCaptcha::ATTR_FAKE_CHARACTERS_COLOR (default: "" - none): one constant among `CSSCaptcha::COLOR_[RED|GREEN|BLUE|LIGHT|DARK]` to generate a random nuance of the given color
 * CSSCaptcha::ATTR_SIGNIFICANT_CHARACTERS_STYLE (default: ""): string, fragment of CSS code to append to significant characters of the challenge
 * CSSCaptcha::ATTR_SIGNIFICANT_CHARACTERS_COLOR (default: "" - none): one constant among `CSSCaptcha::COLOR_[RED|GREEN|BLUE|LIGHT|DARK]` to generate a random nuance of the given color
+* CSSCaptcha::ATTR_HTML_WRAPPER_TAG (default: "div"): HTML tag name of container element
+* CSSCaptcha::ATTR_HTML_WRAPPER_ID (default: "captcha"): HTML/CSS ID of container element
+* CSSCaptcha::ATTR_HTML_ELEMENT_TAG (default: "span"): HTML tag to display challenge (and fake) characters
 
 Notes:
 * `CSSCaptcha::ATTR_CHALLENGE_LENGTH` and `CSSCaptcha::ATTR_SESSION_PREFIX` are only effective when set through the constructor, not after (for example, `CSSCaptcha::setAttribute` won't work)
@@ -113,7 +116,7 @@ Here for the token 8z2cx6yw with 2 fake characters - 8**w**z2**u**cx6yw.
 | Choice in Unicode version | at compile time | no (based on 6.1.0 or generate your own tables) | - |
 | Random direction (left/right, through float) | not implemented | implemented (for testing, can be en/disabled through `CSSCaptcha::ATTR_ONLY_LTR`) | - |
 | Random nuance of a given color (`CSSCaptcha::ATTR_*_COLOR`) | implemented | implemented | for testing, can be en/disabled |
-| Random prefix "0n+" in nth-child | implemented | not implemented | - |
+| Random prefix "0n+" in nth-child | implemented | implemented | - |
 | Fake characters | implemented | implemented | 0 to disable |
 | Noisy characters (spaces for now) | implemented | implemented | 0 to disable |
 | Way to use it | procedural or OOP | procedural or OOP | - |

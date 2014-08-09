@@ -15,6 +15,9 @@ class CSSCaptcha {
     const ATTR_ONLY_LTR = __LINE__;
     const ATTR_NOISE_LENGTH = __LINE__;
     const ATTR_SESSION_PREFIX = __LINE__;
+    const ATTR_HTML_WRAPPER_ID = __LINE__;
+    const ATTR_HTML_LETTER_TAG = __LINE__;
+    const ATTR_HTML_WRAPPER_TAG = __LINE__;
 //     const ATTR_UNICODE_VERSION = __LINE__;
     const ATTR_CHALLENGE_LENGTH = __LINE__;
     const ATTR_FAKE_CHARACTERS_COLOR = __LINE__;
@@ -361,6 +364,9 @@ class CSSCaptcha {
     private $_attributes = array(
         self::ATTR_ONLY_LTR => FALSE,
         self::ATTR_NOISE_LENGTH => 2,
+        self::ATTR_HTML_LETTER_TAG => 'span',
+        self::ATTR_HTML_WRAPPER_TAG => 'div',
+        self::ATTR_HTML_WRAPPER_ID => 'captcha',
         self::ATTR_CHALLENGE_LENGTH => 8,
         self::ATTR_SESSION_PREFIX => 'captcha_',
         self::ATTR_FAKE_CHARACTERS_LENGTH => 2,
@@ -508,7 +514,7 @@ class CSSCaptcha {
     protected function generateChar(/*&$ret,*/ $index, $character, $significant)
     {
         $p = intval($character, strlen(self::ALPHABET));
-        $ret = '#captcha span:nth-child(';
+        $ret = '#' . $this->_attributes[self::ATTR_HTML_WRAPPER_ID] . ' ' . $this->_attributes[self::ATTR_HTML_LETTER_TAG] . ':nth-child(';
         if (rand(0, 1)) {
             $ret .= '0n+';
         }
@@ -561,9 +567,9 @@ class CSSCaptcha {
                 $map = range(0, $total_len - 1);
             }
             if ($rtl) {
-                $ret .= '#captcha { float: left; /*position: absolute; left: 0;*/ height: auto; overflow: hidden; zoom: 1; }' . "\n";
-                $ret .= '#captcha span { float: right; }' . "\n";
-                $ret .= '#captcha:after { content: "."; visibility: hidden; display: block; height: 0; clear: both; }' . "\n";
+                $ret .= '#' . $this->_attributes[self::ATTR_HTML_WRAPPER_ID] . ' { float: left; /*position: absolute; left: 0;*/ height: auto; overflow: hidden; zoom: 1; }' . "\n";
+                $ret .= '#' . $this->_attributes[self::ATTR_HTML_WRAPPER_ID] . ' span { float: right; }' . "\n";
+                $ret .= '#' . $this->_attributes[self::ATTR_HTML_WRAPPER_ID] . ':after { content: "."; visibility: hidden; display: block; height: 0; clear: both; }' . "\n";
                 $map = array_reverse($map);
             }
             for ($i = 0; $i < $total_len; $i++) {
@@ -579,7 +585,9 @@ class CSSCaptcha {
         }
 
         if ($what & self::RENDER_HTML) {
-            $ret .= '<div id="captcha">' . str_repeat('<span></span>', $total_len) . '</div>';
+            $ret .= '<' . $this->_attributes[self::ATTR_HTML_WRAPPER_TAG] . ' id="' . $this->_attributes[self::ATTR_HTML_WRAPPER_ID] . '">'
+                 . str_repeat('<' . $this->_attributes[self::ATTR_HTML_LETTER_TAG] . '></' . $this->_attributes[self::ATTR_HTML_LETTER_TAG] . '>', $total_len)
+                 . '</' . $this->_attributes[self::ATTR_HTML_WRAPPER_TAG] . '>';
         }
 
         return $ret;
