@@ -9,6 +9,9 @@ if (!extension_loaded('captcha')) {
 <html>
     <head>
         <meta charset="utf-8" />
+<!--<style stype="text/css">
+body {font-family:"Arial Unicode MS","DejaVu Sans",sans-serif}
+</style>-->
     </head>
     <body>
 <?php
