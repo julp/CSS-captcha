@@ -27,7 +27,7 @@
 extern char __progname[];
 #else
 extern char *__progname;
-# endif /* _MSC_VER */
+#endif /* _MSC_VER */
 
 #ifndef EUSAGE
 # define EUSAGE -2
