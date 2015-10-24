@@ -1668,7 +1668,7 @@ ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(ainfo_captcha_2arg, 0, 0, 2)
     ZEND_ARG_INFO(0, arg1)
-    ZEND_ARG_INFO(0, arg1)
+    ZEND_ARG_INFO(0, arg2)
 ZEND_END_ARG_INFO()
 
 zend_function_entry Captcha_class_functions[] = {
