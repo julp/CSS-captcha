@@ -13,7 +13,7 @@ include_directories(
     ${CMAKE_BINARY_DIR}
 )
 
-set(SOURCES tables.c)
+set(SOURCES tables.c darray.c)
 
 # include(CheckFunctionExists)
 # check_function_exists("getopt_long")

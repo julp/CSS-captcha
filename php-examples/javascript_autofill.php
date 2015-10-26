@@ -22,7 +22,7 @@ if (defined('CSSCaptcha::ATTR_ONLY_LTR')) {
 }
 
 $errors = array();
-$captcha = new CSSCaptcha(KEY/*, new CSSCaptchaSessionWriter*/, $options);
+$captcha = new CSSCaptcha(KEY, new CSSCaptchaSessionStore, $options);
 if ('POST' == $_SERVER['REQUEST_METHOD']) {
     if (array_key_exists('from', $_POST)) {
         if (!filter_var($_POST['from'], FILTER_VALIDATE_EMAIL)) {
@@ -53,7 +53,6 @@ if ('POST' == $_SERVER['REQUEST_METHOD']) {
             "[" . date('Y-m-d H:i:s') . "] \"{$_POST['from']}\" as {$_SERVER['REMOTE_ADDR']} wrote \"{$_POST['comment']}\"" . PHP_EOL,
             FILE_APPEND
         );
-        $captcha->renew();
         $_SESSION['flash'] = 'Comment sent!';
         header('Location: ' . $_SERVER['REQUEST_URI']);
         exit;

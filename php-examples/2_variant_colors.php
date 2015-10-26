@@ -12,7 +12,6 @@ if (!extension_loaded('captcha')) {
     </head>
     <body>
 <?php
-define('MAX_ATTEMPTS', 10);
 define('KEY', pathinfo(__FILE__, PATHINFO_FILENAME));
 
 $options = array(
@@ -21,16 +20,12 @@ $options = array(
     CSSCaptcha::ATTR_SIGNIFICANT_CHARACTERS_COLOR => CSSCaptcha::COLOR_BLUE,
 );
 
-$captcha = new CSSCaptcha(KEY, $options);
+$captcha = new CSSCaptcha(KEY, new CSSCaptchaSessionStore, $options);
 if (isset($_POST['captcha'])) {
     if ($captcha->validate($_POST['captcha'])) {
-        $captcha->renew();
         echo '<p>You pass, new token created.</p>';
-    } else if ($captcha->getAttempts() >= MAX_ATTEMPTS) {
-        $captcha->renew();
-        echo '<p>Too many failures, new token created.</p>';
     } else {
-        echo '<p>You fail.</p>';
+        echo '<p>You fail. Retry.</p>';
     }
 }
 ?>
@@ -47,7 +42,6 @@ if (isset($_POST['captcha'])) {
             <fieldset>
                 <legend>Debug: internal states</legend>
                 <p>Expect: <?php var_dump($captcha->getChallenge()); ?></p>
-                <p>Attempts: <?php echo $captcha->getAttempts(), ' / ', MAX_ATTEMPTS; ?></p>
             </fieldset>
             <input type="submit" value="Send"/>
         </form>

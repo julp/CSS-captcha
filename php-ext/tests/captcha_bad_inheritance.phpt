@@ -6,7 +6,7 @@ if (!extension_loaded('captcha')) { die('skip, captcha extension not available')
 ?>
 --FILE--
 <?php
-session_id('012456789');
+session_id(md5(__FILE__));
 @ session_start();
 
 class CSSCaptchaBis extends CSSCaptcha {

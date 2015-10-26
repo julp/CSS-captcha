@@ -15,22 +15,15 @@ body {font-family:"Arial Unicode MS","DejaVu Sans",sans-serif}
     </head>
     <body>
 <?php
-define('MAX_ATTEMPTS', 10);
 define('KEY', pathinfo(__FILE__, PATHINFO_FILENAME));
 
+$captcha = new CSSCaptcha(KEY, new CSSCaptchaSessionStore);
 if (isset($_POST['captcha'])) {
-    $captcha = new CSSCaptcha(KEY);
     if ($captcha->validate($_POST['captcha'])) {
-        $captcha->renew();
         echo '<p>You pass, new token created.</p>';
-    } else if ($captcha->getAttempts() >= MAX_ATTEMPTS) {
-        $captcha->renew();
-        echo '<p>Too many failures, new token created.</p>';
     } else {
-        echo '<p>You fail.</p>';
+        echo '<p>You fail. Retry.</p>';
     }
-} else /*if (!isset($_SESSION['']))*/ {
-    $captcha = new CSSCaptcha(KEY);
 }
 ?>
         <form method="post" action="">
@@ -39,7 +32,6 @@ if (isset($_POST['captcha'])) {
                 Captcha : <input type="text" name="captcha"/> (only lower cased letter and digit)
             </div>
             <p>Expect: <?php var_dump($captcha->getChallenge()); ?></p>
-            <p>Attempts: <?php echo $captcha->getAttempts(), ' / ', MAX_ATTEMPTS; ?></p>
             <input type="submit" value="Envoyer"/>
         </form>
     </body>

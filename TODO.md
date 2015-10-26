@@ -11,9 +11,9 @@
 * [x] remove code points newer than Unicode 5.0.0 ? (see unicode/uchar.h, function u_charAge and unicode/uversion.h, function u_versionFromString, then memcmp both)
 * [ ] generate a random id instead of `<div id="captcha">` ? (without digits)
 * [ ] wider use of Unicode ?
-* [ ] add CSSCaptcha::ATTR_ALPHABET ?
+* [x] add CSSCaptcha::ATTR_ALPHABET ?
 * [ ] ruby gem ?
-* [ ] split code in 2 or 3 parts (challenge generation, rendering, data serialization - to use something else than sessions, redis for example)
+* [x] split code in 2 or 3 parts (challenge generation, rendering, data serialization - to use something else than sessions, redis for example)
 
 CSS obfuscation:
 * [ ] synonyms for nth-child ? 1/X = first-child, X/X = last-child, ...

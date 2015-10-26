@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <string.h>
 #include <stdio.h>
 #include <getopt.h>
 #include <errno.h>
@@ -8,6 +9,8 @@
 #include <unicode/uset.h>
 #include <unicode/ubrk.h>
 #include <unicode/unorm2.h>
+
+#include "darray.h"
 
 #define U_0 0x0030 /* 0 */
 #define U_9 0x0039 /* 9 */
@@ -41,12 +44,19 @@ extern char *__progname;
 # endif
 #endif /* !UINT8_MAX */
 
-static char alphabet[] = "0123456789abcdefghijklmnopqrstuvwxyz";
-static UChar default_ignorables[] = { 0x005B, 0x005C, 0x0074, 0x005C, 0x006E, 0x005C, 0x0066, 0x005C, 0x0072, 0x005C, 0x0070, 0x007B, 0x005A, 0x007D, 0x005D, 0 }; /* [\t\n\f\r\p{Z}] */
+typedef struct {
+    int cu_len;
+    UChar32 value;
+    UVersionInfo version;
+} codepoint_t;
 
-static char optstr[] = "i:v:";
+static char alphabet[] = "0123456789abcdefghijklmnopqrstuvwxyz";
+static UChar default_ignorables[] = { 0x005B, 0x005C, 0x0074, 0x005C, 0x006E, 0x005C, 0x0066, 0x005C, 0x0072, 0x005C, 0x0070, 0x007B, 0x005A, 0x007D, 0x005D, 0 }; /* [\p{Z}] */
+
+static char optstr[] = "f:i:v:";
 
 static struct option long_options[] = {
+    { "format",     required_argument, NULL, 'f' },
     { "ignorables", required_argument, NULL, 'i' },
     { "version",    required_argument, NULL, 'v' },
     { NULL,         no_argument,       NULL, 0   }
@@ -61,6 +71,162 @@ static void usage(void)
         optstr
     );
     exit(EUSAGE);
+}
+
+enum {
+#define UNICODE_FIRST(M, m, p) \
+    UNICODE_FIRST = UNICODE_##M##_##m##_##p,
+#define UNICODE_LAST(M, m, p) \
+    UNICODE_LAST = UNICODE_##M##_##m##_##p,
+#define UNICODE_VERSION(M, m, p) \
+    UNICODE_##M##_##m##_##p,
+#include "unicode_versions.h"
+    _UNICODE_VERSIONS_COUNT
+#undef UNICODE_FIRST
+#undef UNICODE_LAST
+#undef UNICODE_VERSION
+};
+
+static UVersionInfo unicode_versions[_UNICODE_VERSIONS_COUNT] = {
+#define UNICODE_FIRST(M, m, p) /* NOP */
+#define UNICODE_LAST(M, m, p) /* NOP */
+#define UNICODE_VERSION(M, m, p) \
+    { M, m, p, 0 },
+#include "unicode_versions.h"
+#undef UNICODE_FIRST
+#undef UNICODE_LAST
+#undef UNICODE_VERSION
+};
+
+#define IDENT_STRING "    "
+
+#define NEW_LINE(fp) \
+    fputc('\n', fp)
+
+static void generic_generate_table(FILE *fp, DArray **da, const char *start_decl, const char *end_decl)
+{
+    int i, col_len;
+
+    fputs(start_decl, fp);
+    NEW_LINE(fp);
+    fputs(IDENT_STRING, fp);
+    col_len = STR_LEN(IDENT_STRING);
+    for (i = 0; i < STR_LEN(alphabet) + 1 /* for ignorables */; i++) {
+        size_t l, j;
+
+        l = darray_length(da[i]);
+        for (j = 0; j < l; j++) {
+            codepoint_t cp;
+
+            cp = darray_at_unsafe(da[i], j, codepoint_t);
+            col_len += fprintf(fp, 2 == cp.cu_len ? "0x%06X," : "0x%04X,", cp.value);
+            if (col_len > 160) {
+                col_len = STR_LEN(IDENT_STRING);
+                NEW_LINE(fp);
+                fputs(IDENT_STRING, fp);
+            } else {
+                fputc(' ', fp);
+            }
+        }
+    }
+    NEW_LINE(fp);
+    fputs(end_decl, fp);
+    NEW_LINE(fp);
+}
+
+static void generic_generate_offsets(FILE *fp, size_t offsets[][_UNICODE_VERSIONS_COUNT + 1 /* for start offsets */], const char *fmt_start_decl, const char *end_decl, const char *array_beg, char array_end)
+{
+    int i;
+
+    fprintf(fp, fmt_start_decl, _UNICODE_VERSIONS_COUNT + 1 /* for start offsets */);
+    fputs(" = ", fp);
+    fputs(array_beg, fp);
+    NEW_LINE(fp);
+    fputs(IDENT_STRING, fp);
+    fprintf(fp, "/*%*cSTART", strlen(array_beg), ' ');
+    for (i = 0; i < _UNICODE_VERSIONS_COUNT; i++) {
+        fprintf(fp, " | %u.%u.%u", unicode_versions[i][0], unicode_versions[i][1], unicode_versions[i][2]);
+    }
+    fputs(" */", fp);
+    NEW_LINE(fp);
+    for (i = 0; i < STR_LEN(alphabet) + 1 /* for ignorables */; i++) {
+        int j;
+
+        if (0 != i) {
+            fprintf(fp, " %c,", array_end);
+            NEW_LINE(fp);
+        }
+        fputs(IDENT_STRING, fp);
+        fputs("/* ", fp);
+        if ('\0' == alphabet[i]) {
+            fputs("ignorables", fp);
+        } else {
+            fputc(alphabet[i], fp);
+        }
+        fputs(" */", fp);
+        NEW_LINE(fp);
+        fputs(IDENT_STRING, fp);
+        fputs(array_beg, fp);
+        fputc(' ', fp);
+        for (j = 0; j < _UNICODE_VERSIONS_COUNT + 1 /* for start offsets */; j++) {
+            if (0 != j) {
+                fputs(", ", fp);
+            }
+            fprintf(fp, "%6zu", offsets[i][j]);
+        }
+    }
+    fprintf(fp, " %c", array_end);
+    NEW_LINE(fp);
+    fputs(end_decl, fp);
+    NEW_LINE(fp);
+}
+
+void generate_tables_for_php(FILE *fp, DArray **da, size_t offsets[][_UNICODE_VERSIONS_COUNT + 1 /* for start offsets */])
+{
+    generic_generate_table(fp, da, "protected static $_table = array(", ");");
+    generic_generate_offsets(fp, offsets, "protected static $_offsets", ");", "array(", ')');
+}
+
+void generate_tables_for_c(FILE *fp, DArray **da, size_t offsets[][_UNICODE_VERSIONS_COUNT + 1 /* for start offsets */])
+{
+    int i;
+
+    fputs("/* do not edit this file, it was generated by gen/tables */\n\n", fp);
+    generic_generate_table(fp, da, "static uint32_t table[] = {", "};");
+    generic_generate_offsets(fp, offsets, "static size_t offsets[][%d]", "};", "{", '}');
+}
+
+static struct {
+    const char *name;
+    void (*callback)(FILE *, DArray **, size_t [][_UNICODE_VERSIONS_COUNT + 1 /* for start offsets */]);
+} formats[] = {
+    { "c", generate_tables_for_c },
+    { "php", generate_tables_for_php }
+};
+
+int cmp_version_info(const void *a, const void *b)
+{
+    const UVersionInfo *v1, *v2;
+
+    v1 = (const UVersionInfo *) a; /* key */
+    v2 = (const UVersionInfo *) b;
+
+    return memcmp(v1, v2, sizeof(*v1));
+}
+
+int sort_codepoints(const void *a, const void *b, void *arg)
+{
+    int diff;
+    const codepoint_t *c1, *c2;
+
+    c1 = (const codepoint_t *) a;
+    c2 = (const codepoint_t *) b;
+
+    if (0 == (diff = (memcmp(c1->version, c2->version, sizeof(*c1->version))))) {
+        diff = c1->value - c2->value;
+    }
+
+    return diff;
 }
 
 int version_check(const char *s)
@@ -105,18 +271,16 @@ int accept_as(UChar c)
 int main(int argc, char **argv)
 {
     size_t i;
-    UChar32 c;
     USet *uset;
+    codepoint_t cp;
     UErrorCode status;
     UBreakIterator *ubrk;
     UChar *user_ignorables;
-    int32_t cp_len, res_len;
-    char path[1024] = "X.txt";
     const UNormalizer2 *unorm;
-    int o, ret, letter, vflag;
     UVersionInfo wanted_version;
-    FILE *fps[STR_LEN(alphabet) + 1] = { 0 }; /* + 1 for ignorables.txt */
-    UChar cp[U16_MAX_LENGTH + 1], res[STR_LEN(cp) * MAX_UTF16_NFKD_EXPANSION_FACTOR + 1];
+    int o, ret, letter, vflag, output_format;
+    DArray *da[STR_LEN(alphabet) + 1] = { 0 }; /* + 1 for ignorables.txt */
+    size_t offsets[STR_LEN(alphabet) + 1 /* for ignorables */][_UNICODE_VERSIONS_COUNT + 1 /* for start offsets */] = { 0 };
 
     vflag = 0;
     ubrk = NULL;
@@ -124,6 +288,7 @@ int main(int argc, char **argv)
     unorm = NULL;
     ret = EXIT_FAILURE;
     status = U_ZERO_ERROR;
+    output_format = 0; // default for "c"
     user_ignorables = default_ignorables;
 
 #ifdef BSD
@@ -159,6 +324,21 @@ int main(int argc, char **argv)
 
     while (-1 != (o = getopt_long(argc, argv, optstr, long_options, NULL))) {
         switch (o) {
+            case 'f':
+            {
+                output_format = -1;
+
+                for (i = 0; -1 == output_format && i < ARRAY_SIZE(formats); i++) {
+                    if (0 == strcmp(formats[i].name, optarg)) {
+                        output_format = i;
+                    }
+                }
+                if (-1 == output_format) {
+                    fprintf(stderr, "unknown format %s\n", optarg);
+                    return EXIT_FAILURE;
+                }
+                break;
+            }
             case 'i':
             {
                 UConverter *ucnv;
@@ -219,10 +399,14 @@ int main(int argc, char **argv)
         fprintf(stderr, "uset_openPattern failed with %s\n", u_errorName(status));
         goto end;
     }
+#if U_ICU_VERSION_MAJOR_NUM >= 49
 //     unorm = unorm2_getNFDInstance(&status);
     unorm = unorm2_getNFKDInstance(&status);
+#else
+    unorm = unorm2_getInstance(NULL, "nfkc", UNORM2_DECOMPOSE, &status);
+#endif /* ICU >= 49 */
     if (U_FAILURE(status)) {
-        fprintf(stderr, "unorm2_getNFDInstance failed with %s\n", u_errorName(status));
+        fprintf(stderr, "unorm2_getNFKDInstance failed with %s\n", u_errorName(status));
         goto end;
     }
     ubrk = ubrk_open(UBRK_CHARACTER, NULL, NULL, 0, &status);
@@ -230,35 +414,30 @@ int main(int argc, char **argv)
         fprintf(stderr, "ubrk_open failed with %s\n", u_errorName(status));
         goto end;
     }
-    for (i = 0; i < STR_LEN(alphabet); i++) {
-        path[0] = alphabet[i];
-        if (NULL == (fps[i] = fopen(path, "w"))) {
-            fprintf(stderr, "fopen failed\n");
-            goto end;
-        }
+    for (i = 0; i < STR_LEN(alphabet) + 1 /* for ignorables */; i++) {
+        da[i] = darray_new(NULL, sizeof(codepoint_t));
     }
-    if (NULL == (fps[i] = fopen("ignorables.txt", "w"))) {
-        fprintf(stderr, "fopen failed\n");
-        goto end;
-    }
-    for (c = 0x80; c <= UCHAR_MAX_VALUE; c++) {
-        cp_len = 0;
-        U16_APPEND_UNSAFE(cp, cp_len, c);
-        cp[cp_len] = 0;
-        res_len = unorm2_normalize(unorm, cp, cp_len, res, STR_SIZE(res), &status);
+    for (cp.value = 0x80; cp.value <= UCHAR_MAX_VALUE; cp.value++) {
+        int32_t res_len;
+        UChar cu[U16_MAX_LENGTH + 1], res[STR_LEN(cu) * MAX_UTF16_NFKD_EXPANSION_FACTOR + 1];
+
+        cp.cu_len = 0;
+        U16_APPEND_UNSAFE(cu, cp.cu_len, cp.value);
+        cu[cp.cu_len] = 0;
+        res_len = unorm2_normalize(unorm, cu, cp.cu_len, res, STR_SIZE(res), &status);
         if (U_FAILURE(status)) {
             fprintf(stderr, "unorm2_normalize failed with %s\n", u_errorName(status));
             goto end;
         }
+        u_charAge(cp.value, cp.version);
         if (vflag) {
-            UVersionInfo char_version;
-
-            u_charAge(c, char_version);
-            if (memcmp(char_version, wanted_version, sizeof(wanted_version)) > 0) {
+            if (memcmp(cp.version, wanted_version, sizeof(wanted_version)) > 0) {
                 continue;
             }
         }
         if ((letter = accept_as(res[0])) >= 0) {
+            UVersionInfo *match;
+
             ubrk_setText(ubrk, res, res_len, &status);
             if (U_FAILURE(status)) {
                 fprintf(stderr, "ubrk_setText failed with %s\n", u_errorName(status));
@@ -269,21 +448,54 @@ int main(int argc, char **argv)
             if (UBRK_DONE != ubrk_next(ubrk)) {
                 continue;
             }
-            if (2 == cp_len) {
-                fprintf(fps[letter], "%06X\n", c);
+            if (NULL == (match = bsearch(&cp.version, unicode_versions, ARRAY_SIZE(unicode_versions), sizeof(unicode_versions[0]), cmp_version_info))) {
+                fprintf(stderr, "unable to found Unicode version %u.%u.%u.%u\n", cp.version[0], cp.version[1], cp.version[2], cp.version[3]);
+                goto end;
             } else {
-                fprintf(fps[letter], "%04X\n", c);
+                offsets[letter][match - unicode_versions + 1 /* for start offsets */]++;
             }
+            darray_push(da[letter], cp);
         }
     }
     {
         int32_t i, s;
+        UVersionInfo *match;
 
         for (i = 0, s = uset_size(uset); i < s; i++) {
-            c = uset_charAt(uset, i);
-            fprintf(fps[ARRAY_SIZE(fps) - 1], "%06X\n", c);
+            cp.value = uset_charAt(uset, i);
+            if (cp.value < 0x20) {
+                continue;
+            }
+            u_charAge(cp.value, cp.version);
+            if (vflag) {
+                if (memcmp(cp.version, wanted_version, sizeof(wanted_version)) > 0) {
+                    continue;
+                }
+            }
+            cp.cu_len = U16_LENGTH(cp.value);
+            if (NULL == (match = bsearch(&cp.version, unicode_versions, ARRAY_SIZE(unicode_versions), sizeof(unicode_versions[0]), cmp_version_info))) {
+                fprintf(stderr, "unable to found Unicode version %u.%u.%u.%u\n", cp.version[0], cp.version[1], cp.version[2], cp.version[3]);
+                goto end;
+            } else {
+                offsets[ARRAY_SIZE(da) - 1][match - unicode_versions + 1 /* for start offsets */]++;
+            }
+            darray_push(da[ARRAY_SIZE(da) - 1], cp);
         }
     }
+    for (i = 0; i < STR_LEN(alphabet) + 1 /* for ignorables */; i++) {
+        darray_sort(da[i], sort_codepoints, NULL);
+    }
+    for (i = 0; i < STR_LEN(alphabet) + 1 /* for ignorables */; i++) {
+        int j;
+
+        if (0 != i) {
+            offsets[i][0] = offsets[i - 1][_UNICODE_VERSIONS_COUNT - 1 + 1 /* for start offsets */];
+        }
+        for (j = 1; j < _UNICODE_VERSIONS_COUNT + 1 /* for start offsets */; j++) {
+            offsets[i][j] += offsets[i][j - 1];
+        }
+    }
+    formats[output_format].callback(stdout, da, offsets);
     ret = EXIT_SUCCESS;
 
 end:
@@ -296,10 +508,8 @@ end:
     if (NULL != uset) {
         uset_close(uset);
     }
-    for (i = 0; i < ARRAY_SIZE(fps); i++) {
-        if (NULL != fps[i]) {
-            fclose(fps[i]);
-        }
+    for (i = 0; i < STR_LEN(alphabet) + 1 /* for ignorables */; i++) {
+        darray_destroy(da[i]);
     }
     {
 #include <unicode/uclean.h>

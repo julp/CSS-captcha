@@ -6,13 +6,34 @@ A demonstration of the plain php implementation is available online: http://julp
 
 Run dependency: nothing you should already have (only PHP's session extension, no gd or imagemagick extension)
 
+## Usage/installation
+
+### As PHP extension
+
+To use the php extension, build it as any other extension. For a dynamically linked extension:
+```
+cd /path/to/CSS-Captcha/php-ext
+phpize
+./configure
+make
+(sudo) make install
+```
+And make sure to have a line `extension=captcha.so` in your php.ini (then restart apache or fpm if needed).
+
+### As plain PHP
+
+Just grab the file php-plain/CSSCaptcha.php and load it (require) into your script.
+
 ## Implementation
 
 ### Attributes
 
-* CSSCaptcha::ATTR_CHALLENGE_LENGTH (default: 8): integer, maximum 16, challenge length.
-* CSSCaptcha::ATTR_FAKE_CHARACTERS_LENGTH (default: 2): integer, from 0 (disabled) to 16, number of irrelevant characters added to the challenge when displayed.
-* CSSCaptcha::ATTR_NOISE_LENGTH (default: 2): integer (0 for none), define the maximum number of noisy characters to add before and after each character composing the challenge. A random number of whitespaces (may be punctuations in the future) will be picked between 0 and this maximum.
+* CSSCaptcha::ATTR_CHALLENGE_LENGTH (default: 8): integer, maximum 16, challenge length
+* CSSCaptcha::ATTR_REVERSED (default: `CSSCaptcha::RANDOM`): integer, one of `CSSCaptcha::[ALWAYS|NEVER|RANDOM]`, inverse order of displayed element (set it to `CSSCaptcha::NEVER` to disable it)
+* CSSCaptcha::ATTR_UNICODE_VERSION (default: `CSSCaptcha::UNICODE_6_0_0`): integer, set maximum version of Unicode from which to pick up code points (redefine it with one the constants `CSSCaptcha::UNICODE_X_X_X` or `CSSCaptcha::UNICODE_FIRST`/`CSSCaptcha::UNICODE_LAST`)
+* CSSCaptcha::ATTR_ALPHABET (default: "23456789abcdefghjkmnpqrstuvwxyz"): string, subset of ASCII alphanumeric characters from which to pick characters to generate the challenge (eg: define it to `implode(range('0', '9'))` to only use digits)
+* CSSCaptcha::ATTR_FAKE_CHARACTERS_LENGTH (default: 2): integer, from 0 (disabled) to 16, number of irrelevant characters added to the challenge when displayed
+* CSSCaptcha::ATTR_NOISE_LENGTH (default: 2): integer (0 for none), define the maximum number of noisy characters to add before and after each character composing the challenge. A random number of whitespaces (may be punctuations in the future) will be picked between 0 and this maximum
 * CSSCaptcha::ATTR_SESSION_PREFIX (default: "captcha_"): string, prefix prepended to session key to minimize risks of overwrites
 * CSSCaptcha::ATTR_FAKE_CHARACTERS_STYLE (default: "display: none"): string, fragment of CSS code to append to irrelevant characters of the challenge
 * CSSCaptcha::ATTR_FAKE_CHARACTERS_COLOR (default: "" - none): one constant among `CSSCaptcha::COLOR_[RED|GREEN|BLUE|LIGHT|DARK]` to generate a random nuance of the given color
@@ -23,19 +44,17 @@ Run dependency: nothing you should already have (only PHP's session extension, n
 * CSSCaptcha::ATTR_HTML_ELEMENT_TAG (default: "span"): HTML tag to display challenge (and fake) characters
 
 Notes:
-* `CSSCaptcha::ATTR_CHALLENGE_LENGTH` and `CSSCaptcha::ATTR_SESSION_PREFIX` are only effective when set through the constructor, not after (for example, `CSSCaptcha::setAttribute` won't work)
-* `CSSCaptcha::ATTR_CHALLENGE_LENGTH` only affects the generation of a **new** challenge
+* `CSSCaptcha::ATTR_CHALLENGE_LENGTH`, `CSSCaptcha::ATTR_SESSION_PREFIX`, `CSSCaptcha::ATTR_ALPHABET` and `CSSCaptcha::ATTR_UNICODE_VERSION` are only effective when set through the constructor, not after (for example, `CSSCaptcha::setAttribute` won't work)
+* `CSSCaptcha::ATTR_CHALLENGE_LENGTH`, `CSSCaptcha::ATTR_ALPHABET` and `CSSCaptcha::ATTR_UNICODE_VERSION` only affect the generation of a **new** challenge
 
 ### Functions
 
-* create a captcha object: `object captcha_create(string $key [, array $options ]) or CSSCaptcha::__construct(string $key [, array $options ])`
+* create a captcha object: `object captcha_create(string $key, CSSCaptchaStoreInterface $serializer [, array $options ]) or CSSCaptcha::__construct(string $key, CSSCaptchaStoreInterface $serializer [, array $options ])`
 * render captcha (HTML and CSS can be obtained separately): `string captcha_render(object $captcha [, integer $what = CSSCaptcha::RENDER_HTML | CSSCaptcha::RENDER_CSS ]) or string Captcha::render([ integer $what = CSSCaptcha::RENDER_HTML | CSSCaptcha::RENDER_CSS ])`
 * does user input match current challenge (case insensitive and internal counter for attempts incremented): `boolean captcha_validate(object $captcha, string $input) or boolean CSSCaptcha::validate(string $input)`
-* renew challenge: `void captcha_renew(object $captcha) or void CSSCaptcha::renew()`
 * cleanup session (remove session key): `void captcha_cleanup(object $captcha) or void CSSCaptcha::cleanup()`
 * get initial key associated to the captcha: `string captcha_get_key(object $captcha) or string CSSCaptcha::getKey()`
 * get current challenge: `string captcha_get_challenge(object $captcha) or string CSSCaptcha::getChallenge()`
-* get the number of attempts: `integer captcha_get_attempts(object $captcha) or integer CSSCaptcha::getAttempts()`
 * get current value of an attribute: `mixed captcha_get_attribute(object $captcha, int $attribute) or mixed CSSCaptcha::getAttribute(int $attribute)`
 * set value for an attribute: `mixed captcha_set_attribute(object $captcha, int $attribute, mixed $value) or mixed CSSCaptcha::setAttribute(int $attribute, mixed $value)`
 
@@ -53,7 +72,6 @@ session_start();
     </head>
     <body>
 <?php
-define('MAX_ATTEMPTS', 10);
 define('KEY', pathinfo(__FILE__, PATHINFO_FILENAME));
 
 $options = array(
@@ -62,16 +80,12 @@ $options = array(
     CSSCaptcha::ATTR_SIGNIFICANT_CHARACTERS_COLOR => CSSCaptcha::COLOR_BLUE,
 );
 
-$captcha = new CSSCaptcha(KEY, $options);
+$captcha = new CSSCaptcha(KEY, new CSSCaptchaSessionStore, $options);
 if (isset($_POST['captcha'])) {
     if ($captcha->validate($_POST['captcha'])) {
-        $captcha->renew();
         echo '<p>You pass. New token created.</p>';
-    } else if ($captcha->getAttempts() >= MAX_ATTEMPTS) {
-        $captcha->renew();
-        echo '<p>Too many failures, new token created.</p>';
     } else {
-        echo '<p>You fail.</p>';
+        echo '<p>You fail. Retry.</p>';
     }
 }
 ?>
@@ -81,7 +95,6 @@ if (isset($_POST['captcha'])) {
                 Captcha : <input type="text" name="captcha"/> (enter only blue characters)
             </div>
             <p>Expect: <?php var_dump($captcha->getChallenge()); ?></p>
-            <p>Attempts: <?php echo $captcha->getAttempts(), ' / ', MAX_ATTEMPTS; ?></p>
             <input type="submit" value="Envoyer"/>
         </form>
     </body>
@@ -112,9 +125,9 @@ Here for the token 8z2cx6yw with 2 fake characters - 8**w**z2**u**cx6yw.
 
 | "Feature" | PHP extension | Plain PHP | Note |
 | --------- | ------------- | --------- | ---- |
-| Confusables can be en/disabled | at compile time | enabled without source modification | - |
-| Choice in Unicode version | at compile time | no (based on 6.1.0 or generate your own tables) | - |
-| Random direction (left/right, through float) | not implemented | implemented (for testing, can be en/disabled through `CSSCaptcha::ATTR_ONLY_LTR`) | - |
+| Own alphabet (but subset of ASCII alphanumeric characters) can be defined | implemented | implemented | - |
+| Choice in Unicode version | implemented | implemented | From Unicode 1.1.0 to 6.0.0 with embedded table |
+| Random direction (left/right, through flex) | implemented | implemented | - |
 | Random nuance of a given color (`CSSCaptcha::ATTR_*_COLOR`) | implemented | implemented | for testing, can be en/disabled |
 | Random prefix "0n+" in nth-child | implemented | implemented | - |
 | Fake characters | implemented | implemented | 0 to disable |

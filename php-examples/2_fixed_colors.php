@@ -22,11 +22,12 @@ ul#foo li {
     </head>
     <body>
 <?php
-define('MAX_ATTEMPTS', 10);
 define('KEY', pathinfo(__FILE__, PATHINFO_FILENAME));
 
 // $colors = array('red', 'green', 'blue');
 $options = array(
+//     CSSCaptcha::ATTR_ALPHABET => implode(range('0', '9')),
+//     CSSCaptcha::ATTR_UNICODE_VERSION => CSSCaptcha::UNICODE_3_0_0,
     CSSCaptcha::ATTR_HTML_WRAPPER_ID => 'foo',
     CSSCaptcha::ATTR_HTML_WRAPPER_TAG => 'ul',
     CSSCaptcha::ATTR_HTML_LETTER_TAG => 'li',
@@ -34,16 +35,12 @@ $options = array(
     CSSCaptcha::ATTR_SIGNIFICANT_CHARACTERS_STYLE => 'color: blue;',
 );
 
-$captcha = new CSSCaptcha(KEY, $options);
+$captcha = new CSSCaptcha(KEY, new CSSCaptchaSessionStore, $options);
 if (isset($_POST['captcha'])) {
     if ($captcha->validate($_POST['captcha'])) {
-        $captcha->renew();
         echo '<p>You pass, new token created.</p>';
-    } else if ($captcha->getAttempts() >= MAX_ATTEMPTS) {
-        $captcha->renew();
-        echo '<p>Too many failures, new token created.</p>';
     } else {
-        echo '<p>You fail.</p>';
+        echo '<p>You fail. Retry.</p>';
     }
 }
 ?>
@@ -60,7 +57,6 @@ if (isset($_POST['captcha'])) {
             <fieldset>
                 <legend>Debug: internal states</legend>
                 <p>Expect: <?php var_dump($captcha->getChallenge()); ?></p>
-                <p>Attempts: <?php echo $captcha->getAttempts(), ' / ', MAX_ATTEMPTS; ?></p>
             </fieldset>
             <input type="submit" value="Send"/>
         </form>
