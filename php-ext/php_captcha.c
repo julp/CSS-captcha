@@ -558,7 +558,7 @@ static int check_zero_or_positive_attribute(zval *value TSRMLS_DC)
 static int check_alphabet_content_attribute(zval *value TSRMLS_DC)
 {
     if (Z_STRLEN_P(value) <= 0) {
-        php_error_docref(NULL TSRMLS_CC, E_WARNING, "Alphabet can be empty");
+        php_error_docref(NULL TSRMLS_CC, E_WARNING, "Alphabet can't be empty");
         return 0;
     }
     if (!is_subset_of(value, "0123456789abcdefghijklmnopqrstuvwxyz", STR_LEN("0123456789abcdefghijklmnopqrstuvwxyz"))) {
@@ -583,6 +583,12 @@ static int check_non_empty_string_attribute(zval *value TSRMLS_DC)
 
 static long captcha_set_attribute(Captcha_object* co, ulong attribute, zval **value TSRMLS_DC)
 {
+    int ok;
+    zval tmp;
+
+    ok = 0;
+    tmp = **value;
+    zval_copy_ctor(&tmp);
     switch (attribute) {
 #define BOOL_CAPTCHA_ATTRIBUTE(member, name, defaultvalue) \
         case CAPTCHA_ATTR_PREFIX(name):
@@ -593,9 +599,9 @@ static long captcha_set_attribute(Captcha_object* co, ulong attribute, zval **va
 #undef LONG_CAPTCHA_ATTRIBUTE
 #undef STRING_CAPTCHA_ATTRIBUTE
         {
-            convert_to_boolean(*value);
-            *((zend_bool *) (((char *) co) + attributes[attribute].offset)) = Z_BVAL_PP(value);
-            return 1;
+            ok = 1;
+            convert_to_boolean(&tmp);
+            *((zend_bool *) (((char *) co) + attributes[attribute].offset)) = Z_BVAL(tmp);
         }
 #define BOOL_CAPTCHA_ATTRIBUTE(member, name, defaultvalue)
 #define LONG_CAPTCHA_ATTRIBUTE(member, name, defaultvalue, cb) \
@@ -606,10 +612,9 @@ static long captcha_set_attribute(Captcha_object* co, ulong attribute, zval **va
 #undef LONG_CAPTCHA_ATTRIBUTE
 #undef STRING_CAPTCHA_ATTRIBUTE
         {
-            convert_to_long(*value);
-            if (NULL == attributes[attribute].cb || attributes[attribute].cb(*value TSRMLS_CC)) {
-                *((long *) (((char *) co) + attributes[attribute].offset)) = Z_LVAL_PP(value);
-                return 1;
+            convert_to_long(&tmp);
+            if (ok = (NULL == attributes[attribute].cb || attributes[attribute].cb(&tmp TSRMLS_CC))) {
+                *((long *) (((char *) co) + attributes[attribute].offset)) = Z_LVAL(tmp);
             }
             break;
         }
@@ -622,20 +627,20 @@ static long captcha_set_attribute(Captcha_object* co, ulong attribute, zval **va
 #undef LONG_CAPTCHA_ATTRIBUTE
 #undef STRING_CAPTCHA_ATTRIBUTE
         {
-            convert_to_string(*value);
-            if (NULL == attributes[attribute].cb || attributes[attribute].cb(*value TSRMLS_CC)) {
+            convert_to_string(&tmp);
+            if (ok = (NULL == attributes[attribute].cb || attributes[attribute].cb(&tmp TSRMLS_CC))) {
                 efree(*((char **) (((char *) co) + attributes[attribute].offset)));
-                *((char **) (((char *) co) + attributes[attribute].offset)) = estrndup(Z_STRVAL_PP(value), Z_STRLEN_PP(value));
-                *((zend_strlen_t *) (((char *) co) + attributes[attribute].offset + sizeof(char *))) = Z_STRLEN_PP(value);
-                return 1;
+                *((char **) (((char *) co) + attributes[attribute].offset)) = estrndup(Z_STRVAL(tmp), Z_STRLEN(tmp));
+                *((zend_strlen_t *) (((char *) co) + attributes[attribute].offset + sizeof(char *))) = Z_STRLEN(tmp);
             }
+            zval_dtor(&tmp);
             break;
         }
         default:
             php_error_docref(NULL TSRMLS_CC, E_WARNING, "Unknown attribute %lu", attribute);
     }
 
-    return 0;
+    return ok;
 }
 
 static void captcha_ctor(INTERNAL_FUNCTION_PARAMETERS)
@@ -1194,12 +1199,13 @@ static PHP_METHOD(CSSCaptchaSessionStore, get)
     RETVAL_NULL();
     if (SESSION_IS_ACTIVE()) {
 #if PHP_MAJOR_VERSION >= 7
-        if (NULL != (zret = zend_symtable_find(Z_ARRVAL_P(Z_REFVAL(PS(http_session_vars))), key))) {
+        if (NULL != (zret = zend_symtable_find(Z_ARRVAL_P(Z_REFVAL(PS(http_session_vars))), key)))
             ZVAL_DUP(return_value, zret);
 #else
-        if (SUCCESS == zend_symtable_find(Z_ARRVAL_P(PS(http_session_vars)), key, key_len + 1, (void **) &zret)) {
+        if (SUCCESS == zend_symtable_find(Z_ARRVAL_P(PS(http_session_vars)), key, key_len + 1, (void **) &zret))
             RETVAL_ZVAL(*zret, 1 /* copy */, 0 /* dtor */);
 #endif /* PHP >= 7 */
+        {
 //         ZVAL_COPY(return_value, zret);
 //         Z_TRY_ADDREF_P(return_value);
         }

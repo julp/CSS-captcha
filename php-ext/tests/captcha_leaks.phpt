@@ -1,5 +1,5 @@
 --TEST--
-Captcha: bad inheritance
+Captcha: leaks on internal renew, destruction and string attribute
 --SKIPIF--
 <?php
 if (!extension_loaded('captcha')) { die('skip, captcha extension not available'); }
@@ -13,4 +13,4 @@ $captcha = new CSSCaptcha(pathinfo(__FILE__, PATHINFO_FILENAME), new CSSCaptchaS
 $captcha->validate('wrong');
 $captcha->validate('wrong');
 ?>
---EXPECTF--
+--EXPECT--
