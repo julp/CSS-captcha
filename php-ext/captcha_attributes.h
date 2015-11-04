@@ -7,10 +7,10 @@ LONG_CAPTCHA_ATTRIBUTE(fake_characters_length, FAKE_CHARACTERS_LENGTH, 2, check_
 LONG_CAPTCHA_ATTRIBUTE(significant_characters_color, SIGNIFICANT_CHARACTERS_COLOR, 0, check_color_attribute)
 
 // default_alphabet is defined in php_captcha.c
-STRING_CAPTCHA_ATTRIBUTE(alphabet, ALPHABET, default_alphabet, NULL)        // TODO: check ~ /^[0-9a-z]{2,}$/ (and distinct)
-STRING_CAPTCHA_ATTRIBUTE(session_prefix, SESSION_PREFIX, "captcha_", NULL)  // TODO: check !empty
-STRING_CAPTCHA_ATTRIBUTE(html_wrapper_id, HTML_WRAPPER_ID, "captcha", NULL) // TODO: check !empty
-STRING_CAPTCHA_ATTRIBUTE(html_letter_tag, HTML_LETTER_TAG, "span", NULL)    // TODO: check !empty
-STRING_CAPTCHA_ATTRIBUTE(html_wrapper_tag, HTML_WRAPPER_TAG, "div", NULL)   // TODO: check !empty
+STRING_CAPTCHA_ATTRIBUTE(alphabet, ALPHABET, default_alphabet, check_alphabet_content_attribute)
+STRING_CAPTCHA_ATTRIBUTE(session_prefix, SESSION_PREFIX, "captcha_", check_non_empty_string_attribute)
+STRING_CAPTCHA_ATTRIBUTE(html_wrapper_id, HTML_WRAPPER_ID, "captcha", check_non_empty_string_attribute)
+STRING_CAPTCHA_ATTRIBUTE(html_letter_tag, HTML_LETTER_TAG, "span", check_non_empty_string_attribute)
+STRING_CAPTCHA_ATTRIBUTE(html_wrapper_tag, HTML_WRAPPER_TAG, "div", check_non_empty_string_attribute)
 STRING_CAPTCHA_ATTRIBUTE(fake_characters_style, FAKE_CHARACTERS_STYLE, "display: none", NULL)
 STRING_CAPTCHA_ATTRIBUTE(significant_characters_style, SIGNIFICANT_CHARACTERS_STYLE, "", NULL)

@@ -160,6 +160,8 @@ static int check_challenge_length_attribute(zval * TSRMLS_DC);
 static int check_zero_or_positive_attribute(zval * TSRMLS_DC);
 static int check_never_always_random_attribute(zval * TSRMLS_DC);
 static int check_fake_characters_length_attribute(zval * TSRMLS_DC);
+static int check_non_empty_string_attribute(zval * TSRMLS_DC);
+static int check_alphabet_content_attribute(zval * TSRMLS_DC);
 
 struct captcha_attribute_t {
     size_t offset;
@@ -477,68 +479,106 @@ static void captcha_fetch_or_create_challenge(Captcha_object *co, int renew TSRM
 
 static int check_never_always_random_attribute(zval *value TSRMLS_DC)
 {
+    int valid;
+
     // we can assume that value is a "long" due to anterior convert_to_long
-    if (Z_LVAL_P(value) < 0 || Z_LVAL_P(value) >= CAPTCHA_RANDOM) {
+    valid = Z_LVAL_P(value) >= 0 && Z_LVAL_P(value) <= CAPTCHA_RANDOM;
+    if (!valid) {
         php_error_docref(NULL TSRMLS_CC, E_WARNING, "Invalid value: %ld, one of CAPTCHA_[NEVER|ALWAYS|RANDOM] expected", Z_LVAL_P(value));
-        return 0;
-    } else {
-        return 1;
     }
+
+    return valid;
 }
 
 static int check_unicode_version_attribute(zval *value TSRMLS_DC)
 {
+    int valid;
+
     // we can assume that value is a "long" due to anterior convert_to_long
-    if (Z_LVAL_P(value) < 0 || Z_LVAL_P(value) >= UNICODE_LAST) {
+    valid = Z_LVAL_P(value) >= UNICODE_FIRST && Z_LVAL_P(value) <= UNICODE_LAST;
+    if (!valid) {
         php_error_docref(NULL TSRMLS_CC, E_WARNING, "Invalid unicode version defined: %ld", Z_LVAL_P(value));
-        return 0;
-    } else {
-        return 1;
     }
+
+    return valid;
 }
 
 static int check_color_attribute(zval *value TSRMLS_DC)
 {
+    int valid;
+
     // we can assume that value is a "long" due to anterior convert_to_long
-    if (Z_LVAL_P(value) < 0 || Z_LVAL_P(value) >= CAPTCHA_COLOR_PREFIX(COUNT)) {
+    valid = Z_LVAL_P(value) >= 0 && Z_LVAL_P(value) < CAPTCHA_COLOR_PREFIX(COUNT);
+    if (!valid) {
         php_error_docref(NULL TSRMLS_CC, E_WARNING, "Invalid color value: %ld", Z_LVAL_P(value));
-        return 0;
-    } else {
-        return 1;
     }
+
+    return valid;
 }
 
 static int check_challenge_length_attribute(zval *value TSRMLS_DC)
 {
+    int valid;
+
     // we can assume that value is a "long" due to anterior convert_to_long
-    if (Z_LVAL_P(value) <= 0 || Z_LVAL_P(value) >= MAX_CHALLENGE_LENGTH) {
+    valid = Z_LVAL_P(value) > 0 && Z_LVAL_P(value) <= MAX_CHALLENGE_LENGTH;
+    if (!valid) {
         php_error_docref(NULL TSRMLS_CC, E_WARNING, "Challenge length must be in the range ]0;%lu]", MAX_CHALLENGE_LENGTH);
-        return 0;
-    } else {
-        return 1;
     }
+
+    return valid;
 }
 
 static int check_fake_characters_length_attribute(zval *value TSRMLS_DC)
 {
+    int valid;
+
     // we can assume that value is a "long" due to anterior convert_to_long
-    if (Z_LVAL_P(value) < 0 || Z_LVAL_P(value) >= MAX_CHALLENGE_LENGTH) {
+    valid = Z_LVAL_P(value) >= 0 && Z_LVAL_P(value) <= MAX_CHALLENGE_LENGTH;
+    if (!valid) {
         php_error_docref(NULL TSRMLS_CC, E_WARNING, "Fake characters length must be in the range [0;%lu]", MAX_CHALLENGE_LENGTH);
-        return 0;
-    } else {
-        return 1;
     }
+
+    return valid;
 }
 
 static int check_zero_or_positive_attribute(zval *value TSRMLS_DC)
 {
+    int valid;
+
     // we can assume that value is a "long" due to anterior convert_to_long
-    if (Z_LVAL_P(value) < 0) {
+    valid = Z_LVAL_P(value) >= 0;
+    if (!valid) {
         php_error_docref(NULL TSRMLS_CC, E_WARNING, "Noise length can't be negative");
-        return 0;
-    } else {
-        return 1;
     }
+
+    return valid;
+}
+
+static int check_alphabet_content_attribute(zval *value TSRMLS_DC)
+{
+    if (Z_STRLEN_P(value) <= 0) {
+        php_error_docref(NULL TSRMLS_CC, E_WARNING, "Alphabet can be empty");
+        return 0;
+    }
+    if (!is_subset_of(value, "0123456789abcdefghijklmnopqrstuvwxyz", STR_LEN("0123456789abcdefghijklmnopqrstuvwxyz"))) {
+        php_error_docref(NULL TSRMLS_CC, E_WARNING, "Alphabet can only contains characters from [0-9a-z]");
+        return 0;
+    }
+
+    return 1;
+}
+
+static int check_non_empty_string_attribute(zval *value TSRMLS_DC)
+{
+    int valid;
+
+    valid = Z_STRLEN_P(value) > 0;
+    if (!valid) {
+        php_error_docref(NULL TSRMLS_CC, E_WARNING, "Value for the given attribute can't be empty");
+    }
+
+    return valid;
 }
 
 static long captcha_set_attribute(Captcha_object* co, ulong attribute, zval **value TSRMLS_DC)
@@ -583,10 +623,13 @@ static long captcha_set_attribute(Captcha_object* co, ulong attribute, zval **va
 #undef STRING_CAPTCHA_ATTRIBUTE
         {
             convert_to_string(*value);
-            efree(*((char **) (((char *) co) + attributes[attribute].offset)));
-            *((char **) (((char *) co) + attributes[attribute].offset)) = estrndup(Z_STRVAL_PP(value), Z_STRLEN_PP(value));
-            *((zend_strlen_t *) (((char *) co) + attributes[attribute].offset + sizeof(char *))) = Z_STRLEN_PP(value);
-            return 1;
+            if (NULL == attributes[attribute].cb || attributes[attribute].cb(*value TSRMLS_CC)) {
+                efree(*((char **) (((char *) co) + attributes[attribute].offset)));
+                *((char **) (((char *) co) + attributes[attribute].offset)) = estrndup(Z_STRVAL_PP(value), Z_STRLEN_PP(value));
+                *((zend_strlen_t *) (((char *) co) + attributes[attribute].offset + sizeof(char *))) = Z_STRLEN_PP(value);
+                return 1;
+            }
+            break;
         }
         default:
             php_error_docref(NULL TSRMLS_CC, E_WARNING, "Unknown attribute %lu", attribute);
