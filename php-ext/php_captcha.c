@@ -15,7 +15,7 @@
 // #endif
 
 #include "captcha_table.h"
-#define IGNORABLE_INDEX (ARRAY_SIZE(offsets) - 1)
+#include "../gen/shared.h"
 
 #define STRINGIFY(x) #x
 #define STRINGIFY_EXPANDED(x) STRINGIFY(x)
@@ -168,7 +168,7 @@ struct captcha_attribute_t {
     int (*cb)(zval * TSRMLS_DC);
 } static attributes[] = {
 #define BOOL_CAPTCHA_ATTRIBUTE(member, name, defaultvalue) \
-    { offsetof(Captcha_object, member), cb },
+    { offsetof(Captcha_object, member), NULL },
 #define LONG_CAPTCHA_ATTRIBUTE(member, name, defaultvalue, cb) \
     { offsetof(Captcha_object, member), cb },
 #define STRING_CAPTCHA_ATTRIBUTE(member, name, defaultvalue, cb) \
@@ -216,20 +216,6 @@ static const char default_alphabet[] =
     "23456789abcdefghjkmnpqrstuvwxyz"
 #endif /* CAPTCHA_WITH_CONFUSABLE */
 ;
-
-enum {
-#define UNICODE_FIRST(M, m, p) \
-    UNICODE_FIRST = UNICODE_##M##_##m##_##p,
-#define UNICODE_LAST(M, m, p) \
-    UNICODE_LAST = UNICODE_##M##_##m##_##p,
-#define UNICODE_VERSION(M, m, p) \
-    UNICODE_##M##_##m##_##p,
-#include "../gen/unicode_versions.h"
-    _UNICODE_VERSIONS_COUNT
-#undef UNICODE_FIRST
-#undef UNICODE_LAST
-#undef UNICODE_VERSION
-};
 
 static const char shuffling[] = {
     0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* reserved to challenge characters */
@@ -381,7 +367,7 @@ static void captcha_void(Captcha_object *co TSRMLS_DC)
 
 static void captcha_fetch_or_create_challenge(Captcha_object *co, int renew TSRMLS_DC)
 {
-    zval ZVALPX(args[2]), ZVALPX(zcontainer), ZVALPX(*zchallenge), ZVALPX(*zattemps), ZVALPX(*zfakes);
+    zval ZVALPX(args[2]), ZVALPX(zcontainer), ZVALPX(*zchallenge), ZVALPX(*zfakes);
 
     ZVAL_UNDEF(ZVALRX(zcontainer));
     MAKE_STD_ZVAL(args[0]);
@@ -436,6 +422,7 @@ static void captcha_fetch_or_create_challenge(Captcha_object *co, int renew TSRM
 #if PHP_MAJOR_VERSION < 7
         if (NULL != zcontainer) {
             zval_ptr_dtor(&zcontainer);
+            ZVAL_UNDEF(ZVALRX(zcontainer));
         }
         MAKE_STD_ZVAL(zcontainer);
 #endif /* PHP < 7 */
@@ -466,9 +453,12 @@ static void captcha_fetch_or_create_challenge(Captcha_object *co, int renew TSRM
         args[1] = zcontainer;
         Z_TRY_ADDREF_P(ZVALRX(zcontainer));
         ps_call_handler(ZVALRX(co->callback.cb_set), 2, args, NULL, DTOR_SKIP TSRMLS_CC);
+//         Z_TRY_DELREF_P(ZVALRX(co->challenge));
+//         Z_TRY_DELREF_P(ZVALRX(co->fakes));
+//         Z_TRY_DELREF_P(ZVALRX(co->zcontainer));
         /**
-         * PHP 5 : without = segfault
-         * PHP 7 : with = leaks
+         * PHP 5 : with = segfault
+         * PHP 7 : without = leaks
          **/
 #if PHP_MAJOR_VERSION >= 7
         zval_ptr_dtor(&args[1]);
@@ -601,7 +591,13 @@ static long captcha_set_attribute(Captcha_object* co, ulong attribute, zval **va
         {
             ok = 1;
             convert_to_boolean(&tmp);
-            *((zend_bool *) (((char *) co) + attributes[attribute].offset)) = Z_BVAL(tmp);
+            *((zend_bool *) (((char *) co) + attributes[attribute].offset)) =
+#if PHP_MAJOR_VERSION >= 7
+                IS_TRUE == Z_TYPE(tmp)
+#else
+                Z_BVAL(tmp)
+#endif /* PHP >= 7 */
+            ;
         }
 #define BOOL_CAPTCHA_ATTRIBUTE(member, name, defaultvalue)
 #define LONG_CAPTCHA_ATTRIBUTE(member, name, defaultvalue, cb) \
@@ -912,7 +908,11 @@ static void generate_char(smart_str *ret, Captcha_object *co, long index, char c
             long l;
 
             for (l = 0; l < noise; l++) {
-                e = table[captcha_rand_range(offsets[IGNORABLE_INDEX][0], offsets[IGNORABLE_INDEX][CAPTCHA_ATTR(unicode_version) + 1] - 1 TSRMLS_CC)];
+                if (CAPTCHA_ATTR(skip_unicode_for_challenge)) {
+                    e = table[captcha_rand_range(offsets[TABLE_SPACES][0], offsets[TABLE_SPACES][1] - 1 TSRMLS_CC)];
+                } else {
+                    e = table[captcha_rand_range(offsets[TABLE_SPACES][1], offsets[TABLE_SPACES][CAPTCHA_ATTR(unicode_version) + 1] - 1 TSRMLS_CC)];
+                }
                 smart_str_appendc(ret, '\\');
                 smart_str_append_hexa(ret, e);
             }
@@ -921,7 +921,11 @@ static void generate_char(smart_str *ret, Captcha_object *co, long index, char c
     /* </TODO:DRY> */
     smart_str_appendc(ret, '\\');
     p = char2int(c);
-    e = table[captcha_rand_range(offsets[p][0], offsets[p][CAPTCHA_ATTR(unicode_version) + 1] - 1 TSRMLS_CC)];
+    if (CAPTCHA_ATTR(skip_unicode_for_challenge)) {
+        e = table[captcha_rand_range(offsets[p][0], offsets[p][1] - 1 TSRMLS_CC)];
+    } else {
+        e = table[captcha_rand_range(offsets[p][1], offsets[p][CAPTCHA_ATTR(unicode_version) + 1] - 1 TSRMLS_CC)];
+    }
     smart_str_append_hexa(ret, e);
     /* <TODO:DRY> */
     if (CAPTCHA_ATTR(noise_length)) {
@@ -930,7 +934,11 @@ static void generate_char(smart_str *ret, Captcha_object *co, long index, char c
             long l;
 
             for (l = 0; l < noise; l++) {
-                e = table[captcha_rand_range(offsets[IGNORABLE_INDEX][0], offsets[IGNORABLE_INDEX][CAPTCHA_ATTR(unicode_version) + 1] - 1 TSRMLS_CC)];
+                if (CAPTCHA_ATTR(skip_unicode_for_challenge)) {
+                    e = table[captcha_rand_range(offsets[TABLE_SPACES][0], offsets[TABLE_SPACES][1] - 1 TSRMLS_CC)];
+                } else {
+                    e = table[captcha_rand_range(offsets[TABLE_SPACES][1], offsets[TABLE_SPACES][CAPTCHA_ATTR(unicode_version) + 1] - 1 TSRMLS_CC)];
+                }
                 smart_str_appendc(ret, '\\');
                 smart_str_append_hexa(ret, e);
             }

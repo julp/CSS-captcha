@@ -1,3 +1,5 @@
+BOOL_CAPTCHA_ATTRIBUTE(skip_unicode_for_challenge, SKIP_UNICODE_FOR_CHALLENGE, 0)
+
 LONG_CAPTCHA_ATTRIBUTE(reversed, REVERSED, CAPTCHA_RANDOM, check_never_always_random_attribute)
 LONG_CAPTCHA_ATTRIBUTE(unicode_version, UNICODE_VERSION, UNICODE_6_0_0, check_unicode_version_attribute)
 LONG_CAPTCHA_ATTRIBUTE(noise_length, NOISE_LENGTH, 2, check_zero_or_positive_attribute)

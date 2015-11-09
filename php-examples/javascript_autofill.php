@@ -17,9 +17,6 @@ $options = array(
     CSSCaptcha::ATTR_FAKE_CHARACTERS_LENGTH => 0,
     CSSCaptcha::ATTR_SKIP_UNICODE_FOR_CHALLENGE => TRUE,
 );
-if (defined('CSSCaptcha::ATTR_ONLY_LTR')) {
-    $options[CSSCaptcha::ATTR_ONLY_LTR] = TRUE;
-}
 
 $errors = array();
 $captcha = new CSSCaptcha(KEY, new CSSCaptchaSessionStore, $options);
