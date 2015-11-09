@@ -45,6 +45,7 @@ Just grab the file php-plain/CSSCaptcha.php and load it (require) into your scri
 * `CSSCaptcha::ATTR_HTML_ELEMENT_TAG` (default: `"span"`): HTML tag to display challenge (and fake) characters
 
 Notes:
+
 1. only effective when set through the constructor, not after (for example, `CSSCaptcha::setAttribute` won't work)
 2. only affects the generation of a **new** challenge
 
