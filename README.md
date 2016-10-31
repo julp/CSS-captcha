@@ -35,7 +35,6 @@ Just grab the file php-plain/CSSCaptcha.php and load it (require) into your scri
 * `CSSCaptcha::ATTR_ALPHABET` <sup>1</sup> <sup>2</sup> (default: `"23456789abcdefghjkmnpqrstuvwxyz"`): string, subset of ASCII alphanumeric characters from which to pick characters to generate the challenge (eg: define it to `implode(range('0', '9'))` to only use digits)
 * `CSSCaptcha::ATTR_FAKE_CHARACTERS_LENGTH` (default: `2`): integer, from `0` (disabled) to `16`, number of irrelevant characters added to the challenge when displayed
 * `CSSCaptcha::ATTR_NOISE_LENGTH` (default: `2`): integer (`0` for none), define the maximum number of noisy characters to add before and after each character composing the challenge. A random number of whitespaces (may be punctuations in the future) will be picked between 0 and this maximum
-* `CSSCaptcha::ATTR_SESSION_PREFIX` <sup>1</sup> (default: `"captcha_"`): string, prefix prepended to session key to minimize risks of overwrites
 * `CSSCaptcha::ATTR_FAKE_CHARACTERS_STYLE` (default: `"display: none"`): string, fragment of CSS code to append to irrelevant characters of the challenge
 * `CSSCaptcha::ATTR_FAKE_CHARACTERS_COLOR` (default: `CSSCaptcha::COLOR_NONE`): one constant among `CSSCaptcha::COLOR_[RED|GREEN|BLUE|LIGHT|DARK]` to generate a random nuance of the given color
 * `CSSCaptcha::ATTR_SIGNIFICANT_CHARACTERS_STYLE` (default: `""`): string, fragment of CSS code to append to significant characters of the challenge
@@ -140,7 +139,7 @@ Here for the token 8z2cx6yw with 2 fake characters - 8**w**z2**u**cx6yw.
 | "Feature" | PHP extension | Plain PHP | Note |
 | --------- | ------------- | --------- | ---- |
 | Own alphabet (but subset of ASCII alphanumeric characters) can be defined | implemented | implemented | - |
-| Choice in Unicode version | implemented | implemented | From Unicode 1.1.0 to 6.0.0 with embedded table |
+| Choice in Unicode version | implemented | implemented | From Unicode 1.1.0 to 8.0.0 with embedded table |
 | Random direction (left/right, through flex) | implemented | implemented | - |
 | Random nuance of a given color (`CSSCaptcha::ATTR_*_COLOR`) | implemented | implemented | for testing, can be en/disabled |
 | Random prefix "0n+" in nth-child | implemented | implemented | - |
