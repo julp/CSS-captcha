@@ -1,3 +1,4 @@
+#include <sys/param.h> /* BSD */
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
@@ -53,7 +54,7 @@ typedef struct {
 } codepoint_t;
 
 static char alphabet[] = "0123456789abcdefghijklmnopqrstuvwxyz";
-static UChar spaces[] = { 0x005B, 0x005C, 0x0070, 0x007B, 0x005A, 0x007D, 0x005D, 0 }; /* [\p{Z}] */
+static UChar spaces[] = { 0x005B, 0x005C, 0x0070, 0x007B, 0x005A, 0x007D, 0x005C, 0x0070, 0x007B, 0x0050, 0x0063, 0x007D, 0x005C, 0x0070, 0x007B, 0x0050, 0x0064, 0x007D, 0x005D, 0 }; /* [\p{Z}\p{Pc}\p{Pd}] */
 static UChar combinables[] = { 0x005B, 0x005C, 0x0070, 0x007B, 0x004D, 0x006E, 0x007D, 0x005D, 0 }; /* [\p{Mn}] */
 
 static char optstr[] = "f:i:v:";
@@ -93,7 +94,7 @@ static UVersionInfo unicode_versions[_UNICODE_VERSIONS_COUNT] = {
 #define NEW_LINE(fp) \
     fputc('\n', fp)
 
-static void generic_generate_table(FILE *fp, DArray **da, const char *start_decl, const char *end_decl)
+static void generic_generate_table(FILE *fp, DArray *da, const char *start_decl, const char *end_decl)
 {
     int i, col_len;
 
@@ -104,11 +105,11 @@ static void generic_generate_table(FILE *fp, DArray **da, const char *start_decl
     for (i = 0; i < _TABLE_COUNT; i++) {
         size_t l, j;
 
-        l = darray_length(da[i]);
+        l = darray_length(&da[i]);
         for (j = 0; j < l; j++) {
             codepoint_t cp;
 
-            cp = darray_at_unsafe(da[i], j, codepoint_t);
+            cp = darray_at_unsafe(&da[i], j, codepoint_t);
             col_len += fprintf(fp, 2 == cp.cu_len ? "0x%06X," : "0x%04X,", cp.value);
             if (col_len > 160) {
                 col_len = STR_LEN(IDENT_STRING);
@@ -192,19 +193,19 @@ static void generic_generate_offsets(
     NEW_LINE(fp);
 }
 
-void generate_tables_for_ruby(FILE *fp, DArray **da, size_t offsets[][_UNICODE_VERSIONS_COUNT + 1 /* for start offsets */])
+void generate_tables_for_ruby(FILE *fp, DArray *da, size_t offsets[][_UNICODE_VERSIONS_COUNT + 1 /* for start offsets */])
 {
     generic_generate_table(fp, da, "TABLE = [", "]");
     generic_generate_offsets(fp, offsets, /*"#"*/NULL, "OFFSETS", "]", "[", ']');
 }
 
-void generate_tables_for_php(FILE *fp, DArray **da, size_t offsets[][_UNICODE_VERSIONS_COUNT + 1 /* for start offsets */])
+void generate_tables_for_php(FILE *fp, DArray *da, size_t offsets[][_UNICODE_VERSIONS_COUNT + 1 /* for start offsets */])
 {
-    generic_generate_table(fp, da, "protected static $_table = array(", ");");
-    generic_generate_offsets(fp, offsets, /*"//"*/NULL, "protected static $_offsets", ");", "array(", ')');
+    generic_generate_table(fp, da, "const TABLE = [", "];");
+    generic_generate_offsets(fp, offsets, /*"//"*/NULL, "const OFFSETS", "];", "[", ']');
 }
 
-void generate_tables_for_c(FILE *fp, DArray **da, size_t offsets[][_UNICODE_VERSIONS_COUNT + 1 /* for start offsets */])
+void generate_tables_for_c(FILE *fp, DArray *da, size_t offsets[][_UNICODE_VERSIONS_COUNT + 1 /* for start offsets */])
 {
     int i;
 
@@ -215,7 +216,7 @@ void generate_tables_for_c(FILE *fp, DArray **da, size_t offsets[][_UNICODE_VERS
 
 static struct {
     const char *name;
-    void (*callback)(FILE *, DArray **, size_t [][_UNICODE_VERSIONS_COUNT + 1 /* for start offsets */]);
+    void (*callback)(FILE *, DArray *, size_t [][_UNICODE_VERSIONS_COUNT + 1 /* for start offsets */]);
 } formats[] = {
     { "c", generate_tables_for_c },
     { "php", generate_tables_for_php },
@@ -232,7 +233,7 @@ int cmp_version_info(const void *a, const void *b)
     return memcmp(v1, v2, sizeof(*v1));
 }
 
-int sort_codepoints(const void *a, const void *b, void *arg)
+int sort_codepoints(QSORT_CB_ARGS(const void *a, const void *b, void *arg))
 {
     int diff;
     const codepoint_t *c1, *c2;
@@ -300,18 +301,18 @@ int main(int argc, char **argv)
     UBreakIterator *ubrk;
     USet *uset[_SET_COUNT];
     UChar *user_ignorables;
+    DArray da[_TABLE_COUNT];
     const UNormalizer2 *unorm;
     UVersionInfo wanted_version;
     int o, ret, letter, vflag, output_format;
-    DArray *da[_TABLE_COUNT] = { 0 };
     size_t offsets[_TABLE_COUNT][_UNICODE_VERSIONS_COUNT + 1 /* for start offsets */] = { 0 };
 
     vflag = 0;
     ubrk = NULL;
     unorm = NULL;
+    output_format = 0; // default for "c"
     ret = EXIT_FAILURE;
     status = U_ZERO_ERROR;
-    output_format = 0; // default for "c"
     user_ignorables = spaces;
     for (i = 0; i < ARRAY_SIZE(uset); i++) {
         uset[i] = NULL;
@@ -319,6 +320,7 @@ int main(int argc, char **argv)
 
 #ifdef BSD
     {
+# include <unistd.h>
 # include <sys/types.h>
 # include <pwd.h>
 # include <login_cap.h>
@@ -446,7 +448,7 @@ int main(int argc, char **argv)
         goto end;
     }
     for (i = 0; i < _TABLE_COUNT; i++) {
-        da[i] = darray_new(NULL, sizeof(codepoint_t));
+        darray_init(&da[i], NULL, sizeof(codepoint_t));
     }
     for (cp.value = 0x30; cp.value <= UCHAR_MAX_VALUE; cp.value++) {
         int32_t res_len;
@@ -490,7 +492,7 @@ int main(int argc, char **argv)
             } else {
                 offsets[letter][match - unicode_versions + 1 /* for start offsets */]++;
             }
-            darray_push(da[letter], cp);
+            darray_push(&da[letter], &cp);
         }
     }
     for (i = 0; i < ARRAY_SIZE(uset); i++) {
@@ -512,11 +514,11 @@ int main(int argc, char **argv)
             } else {
                 offsets[TABLE_z + i + 1][match - unicode_versions + 1 /* for start offsets */]++;
             }
-            darray_push(da[TABLE_z + i + 1], cp);
+            darray_push(&da[TABLE_z + i + 1], &cp);
         }
     }
     for (i = 0; i < _TABLE_COUNT; i++) {
-        darray_sort(da[i], sort_codepoints, NULL);
+        darray_sort(&da[i], sort_codepoints, NULL);
     }
     for (i = 0; i < _TABLE_COUNT; i++) {
         int j;
@@ -544,7 +546,7 @@ end:
         }
     }
     for (i = 0; i < _TABLE_COUNT; i++) {
-        darray_destroy(da[i]);
+        darray_destroy(&da[i]);
     }
     {
 #include <unicode/uclean.h>

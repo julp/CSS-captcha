@@ -7,13 +7,16 @@ find_package(ICU 4.4 REQUIRED)
 
 include_directories(
     ${ICU_INCLUDE_DIRS}
-    ${CMAKE_CURRENT_BINARY_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}
-    ${CMAKE_BINARY_DIR}
 )
 
+set(LIBRARIES )
 set(SOURCES tables.c darray.c)
+
+add_definitions(-DWITHOUT_ITERATOR) # darray
+
+if(${CMAKE_SYSTEM_NAME} MATCHES "BSD$")
+    list(APPEND LIBRARIES "util")
+endif(${CMAKE_SYSTEM_NAME} MATCHES "BSD$")
 
 # include(CheckFunctionExists)
 # check_function_exists("getopt_long")
@@ -30,4 +33,4 @@ else(HAVE_GETOPT_H)
 endif(HAVE_GETOPT_H)
 
 add_executable(tables ${SOURCES})
-target_link_libraries(tables ${ICU_LIBRARIES})
+target_link_libraries(tables ${ICU_LIBRARIES} ${LIBRARIES})
