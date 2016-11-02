@@ -18,6 +18,7 @@ run-tests.php
 CMakeCache.txt
 cmake_install.cmake
 /gen/tables
+/gen/supported_unicode_versions.h
 /php-ext/tests/*.sh
 /php-ext/tests/*.exp
 /php-ext/tests/*.out

@@ -228,6 +228,7 @@ static void build_session_key(Captcha_object *co, zval *out)
 {
     smart_str ret = { 0 };
 
+    // TODO: remove CAPTCHA_ATTR(session_prefix) in favor of: CSSCaptchaSessionStore::__construct($prefix = ini_get('csscaptcha.session_prefix'))
     smart_str_appendl(&ret, CAPTCHA_ATTR(session_prefix), CAPTCHA_ATTR(session_prefix_len));
     smart_str_appendl(&ret, co->key, co->key_len);
     smart_str_0(&ret);
@@ -983,7 +984,7 @@ PHP_FUNCTION(captcha_render)
 
         reversed = CAPTCHA_ALWAYS == CAPTCHA_ATTR(reversed) || (CAPTCHA_RANDOM == CAPTCHA_ATTR(reversed) && captcha_rand(1 TSRMLS_CC));
         if (what & CAPTCHA_RENDER_HTML) {
-            smart_str_append_static(&ret, "<style type=\"text/css\">\n");
+            smart_str_append_static(&ret, "<style type=\"text/css\">\n"); // TODO: add scoped=\"scoped\" imply to wrap all in a HTML container?
         }
         if (reversed) {
             smart_str_appendc(&ret, '#');
@@ -1499,7 +1500,7 @@ static PHP_MINIT_FUNCTION(captcha)
     zend_declare_class_constant_long(Captcha_ce_ptr, "UNICODE_LAST",  STR_LEN("UNICODE_LAST"), UNICODE_LAST TSRMLS_CC);
 #define UNICODE_VERSION(M, m, p) \
     zend_declare_class_constant_long(Captcha_ce_ptr, "UNICODE_" #M "_" #m "_" #p,  STR_LEN("UNICODE_" #M "_" #m "_" #p), UNICODE_##M##_##m##_##p TSRMLS_CC);
-#include "../gen/unicode_versions.h"
+#include "../gen/suported_unicode_versions.h"
 #undef UNICODE_FIRST
 #undef UNICODE_LAST
 #undef UNICODE_VERSION
@@ -1554,7 +1555,7 @@ static PHP_MINFO_FUNCTION(captcha)
 #define UNICODE_LAST(M, m, p) \
     php_info_print_table_row(2, "Maximum supported unicode version", #M "." #m "." #p);
 #define UNICODE_VERSION(M, m, p) /* NOP */
-#include "../gen/unicode_versions.h"
+#include "../gen/suported_unicode_versions.h"
 #undef UNICODE_FIRST
 #undef UNICODE_LAST
 #undef UNICODE_VERSION

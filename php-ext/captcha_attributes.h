@@ -10,6 +10,7 @@ LONG_CAPTCHA_ATTRIBUTE(significant_characters_color, SIGNIFICANT_CHARACTERS_COLO
 
 // default_alphabet is defined in php_captcha.c
 STRING_CAPTCHA_ATTRIBUTE(alphabet, ALPHABET, default_alphabet, check_alphabet_content_attribute)
+// TODO: remove CAPTCHA_ATTR(session_prefix) in favor of: CSSCaptchaSessionStore::__construct($prefix = ini_get('csscaptcha.session_prefix'))
 STRING_CAPTCHA_ATTRIBUTE(session_prefix, SESSION_PREFIX, "captcha_", check_non_empty_string_attribute)
 STRING_CAPTCHA_ATTRIBUTE(html_wrapper_id, HTML_WRAPPER_ID, "captcha", check_non_empty_string_attribute)
 STRING_CAPTCHA_ATTRIBUTE(html_letter_tag, HTML_LETTER_TAG, "span", check_non_empty_string_attribute)

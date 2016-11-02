@@ -24,7 +24,7 @@ enum {
     UNICODE_LAST = UNICODE_##M##_##m##_##p,
 # define UNICODE_VERSION(M, m, p) \
     UNICODE_##M##_##m##_##p,
-# include "unicode_versions.h"
+# include "supported_unicode_versions.h"
 # undef UNICODE_FIRST
 # undef UNICODE_LAST
 # undef UNICODE_VERSION

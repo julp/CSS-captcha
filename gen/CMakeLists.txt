@@ -10,7 +10,7 @@ include_directories(
 )
 
 set(LIBRARIES )
-set(SOURCES tables.c darray.c)
+set(SOURCES tables.c darray.c supported_unicode_versions.h)
 
 add_definitions(-DWITHOUT_ITERATOR) # darray
 
@@ -34,3 +34,13 @@ endif(HAVE_GETOPT_H)
 
 add_executable(tables ${SOURCES})
 target_link_libraries(tables ${ICU_LIBRARIES} ${LIBRARIES})
+
+add_executable(versions versions.c)
+target_link_libraries(versions ${ICU_LIBRARIES})
+
+add_custom_command(
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/supported_unicode_versions.h
+    COMMAND versions ${CMAKE_CURRENT_BINARY_DIR}/supported_unicode_versions.h
+    DEPENDS versions
+)
+add_custom_target(supported_unicode_versions DEPENDS supported_unicode_versions.h)

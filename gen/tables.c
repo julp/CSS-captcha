@@ -83,7 +83,7 @@ static UVersionInfo unicode_versions[_UNICODE_VERSIONS_COUNT] = {
 #define UNICODE_LAST(M, m, p) /* NOP */
 #define UNICODE_VERSION(M, m, p) \
     { M, m, p, 0 },
-#include "unicode_versions.h"
+#include "supported_unicode_versions.h"
 #undef UNICODE_FIRST
 #undef UNICODE_LAST
 #undef UNICODE_VERSION
@@ -143,7 +143,7 @@ static void generic_generate_offsets(
         NEW_LINE(fp);
         fputs(IDENT_STRING, fp);
         fputs(one_line_comment, fp);
-        fprintf(fp, "%*c BASE | ASCII", strlen(array_beg) - strlen(one_line_comment) + 2, ' ');
+        fprintf(fp, "%*c BASE | ASCII", (int) (strlen(array_beg) - strlen(one_line_comment) + 2), ' ');
         for (i = UNICODE_FIRST; i < _UNICODE_VERSIONS_COUNT; i++) {
             fprintf(fp, " | %u.%u.%u", unicode_versions[i][0], unicode_versions[i][1], unicode_versions[i][2]);
         }
