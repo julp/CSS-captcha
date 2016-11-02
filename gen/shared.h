@@ -9,7 +9,7 @@ enum {
     TABLE_9 = 9,
     TABLE_a = 10,
 */
-    TABLE_z = 36,
+    TABLE_z = 35,
     TABLE_SPACES, // whitespace and invisible separator
     TABLE_COMBINABLES,
     TABLE_LAST = TABLE_COMBINABLES,
