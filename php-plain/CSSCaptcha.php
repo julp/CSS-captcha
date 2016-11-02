@@ -62,6 +62,7 @@ class CSSCaptcha
     const COLOR_DARK = __LINE__;
     const COLOR_LIGHT = __LINE__;
 
+    const ASCII = __LINE__;
     const UNICODE_1_1_0 = __LINE__;
     const UNICODE_1_1_5 = __LINE__;
     const UNICODE_2_0_0 = __LINE__;
@@ -102,7 +103,6 @@ class CSSCaptcha
     const ATTR_FAKE_CHARACTERS_COLOR = __LINE__;
     const ATTR_FAKE_CHARACTERS_STYLE = __LINE__;
     const ATTR_FAKE_CHARACTERS_LENGTH = __LINE__;
-    const ATTR_SKIP_UNICODE_FOR_CHALLENGE = __LINE__;
     const ATTR_SIGNIFICANT_CHARACTERS_COLOR = __LINE__;
     const ATTR_SIGNIFICANT_CHARACTERS_STYLE = __LINE__;
 
@@ -321,7 +321,6 @@ class CSSCaptcha
         self::ATTR_FAKE_CHARACTERS_STYLE => 'display: none;',
         self::ATTR_FAKE_CHARACTERS_COLOR => self::COLOR_NONE,
         self::ATTR_SIGNIFICANT_CHARACTERS_STYLE => '',
-        self::ATTR_SKIP_UNICODE_FOR_CHALLENGE => FALSE,
         self::ATTR_SIGNIFICANT_CHARACTERS_COLOR => self::COLOR_NONE,
     ];
 
@@ -474,12 +473,7 @@ class CSSCaptcha
         $ret .= $index + 1;
         $ret .= '):after { content: "';
         $this->appendIgnorables($ret);
-        $ret .= '\\';
-        if ($this->_attributes[self::ATTR_SKIP_UNICODE_FOR_CHALLENGE]) {
-            $ret .= self::formatCP(self::TABLE[rand(self::OFFSETS[$p][0], self::OFFSETS[$p][1] - 1)]);
-        } else {
-            $ret .= self::formatCP(self::TABLE[rand(self::OFFSETS[$p][1], self::OFFSETS[$p][$this->_attributes[self::ATTR_UNICODE_VERSION] - self::UNICODE_FIRST + 1] - 1)]);
-        }
+        $ret .= '\\' . self::formatCP(self::TABLE[rand(self::OFFSETS[$p][self::ASCII != $this->_attributes[self::ATTR_UNICODE_VERSION]], self::OFFSETS[$p][$this->_attributes[self::ATTR_UNICODE_VERSION] - self::ASCII + 1] - 1)]);
         $this->appendIgnorables($ret);
         $ret .= '"; ';
         $ret .= $this->setColor($significant);
@@ -587,7 +581,7 @@ class CSSCaptcha
         if (array_key_exists($attribute, $this->_attributes)) {
             if (self::ATTR_ALPHABET == $attribute && !preg_match('.^[0-9a-z]{2,}$.D', $value)) { // TODO: the regexp doesn't assume characters are distinct
                 return FALSE;
-            } else if (self::ATTR_UNICODE_VERSION == $attribute && ($value < self::UNICODE_FIRST || $value > self::UNICODE_LAST)) {
+            } else if (self::ATTR_UNICODE_VERSION == $attribute && ($value < self::ASCII || $value > self::UNICODE_LAST)) {
                 return FALSE;
             } else if (self::ATTR_REVERSED == $attribute && !in_array($value, [ self::ALWAYS, self::NEVER, self::RANDOM ])) {
                 return FALSE;

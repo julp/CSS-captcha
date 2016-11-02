@@ -15,7 +15,7 @@ function h($texte) {
 
 $options = array(
     CSSCaptcha::ATTR_FAKE_CHARACTERS_LENGTH => 0,
-    CSSCaptcha::ATTR_SKIP_UNICODE_FOR_CHALLENGE => TRUE,
+    CSSCaptcha::ATTR_UNICODE_VERSION => CSSCaptcha::ASCII,
 );
 
 $errors = array();
@@ -45,11 +45,13 @@ if ('POST' == $_SERVER['REQUEST_METHOD']) {
     }
     if (!$errors) {
         # don't really send an email, just log for testing
-        file_put_contents(
-            'log.txt',
-            "[" . date('Y-m-d H:i:s') . "] \"{$_POST['from']}\" as {$_SERVER['REMOTE_ADDR']} wrote \"{$_POST['comment']}\"" . PHP_EOL,
-            FILE_APPEND
-        );
+        if ($_SERVER['HTTP_HOST'] != 'julp.lescigales.org') {
+            file_put_contents(
+                'log.txt',
+                "[" . date('Y-m-d H:i:s') . "] \"{$_POST['from']}\" as {$_SERVER['REMOTE_ADDR']} wrote \"{$_POST['comment']}\"" . PHP_EOL,
+                FILE_APPEND
+            );
+        }
         $_SESSION['flash'] = 'Comment sent!';
         header('Location: ' . $_SERVER['REQUEST_URI']);
         exit;
@@ -133,7 +135,7 @@ if ($errors) {
             </div>
             <div class="row">
                 <div class="col-xs-12">
-                    <p class="alert alert-info">Also try this example with javascript disabled.</p>
+                    <p class="alert alert-info">Also try this example with javascript disabled. Note: this is not an actual form, it simulates one.</p>
                 </div>
             </div>
         </div>

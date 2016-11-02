@@ -1,6 +1,6 @@
 ## Description
 
-A captcha engine based on CSS3 and Unicode.
+A (visual only) captcha engine based on CSS3 and Unicode.
 
 A demonstration of the plain php implementation is available online: http://julp.lescigales.org/captcha/
 
@@ -20,7 +20,7 @@ make
 ```
 And make sure to have a line `extension=captcha.so` in your php.ini (then restart apache or fpm if needed).
 
-### As plain PHP
+### As plain PHP (PHP >= 5.6)
 
 Just grab the file php-plain/CSSCaptcha.php and load it (require) into your script.
 
@@ -29,9 +29,8 @@ Just grab the file php-plain/CSSCaptcha.php and load it (require) into your scri
 ### Attributes
 
 * `CSSCaptcha::ATTR_CHALLENGE_LENGTH` <sup>1</sup> <sup>2</sup> (default: `8`): integer, maximum `16`, challenge length
-* `CSSCaptcha::ATTR_SKIP_UNICODE_FOR_CHALLENGE` (default: `FALSE`): boolean, `TRUE` to use regular ASCII characters for challenge
 * `CSSCaptcha::ATTR_REVERSED` (default: `CSSCaptcha::RANDOM`): integer, one of `CSSCaptcha::[ALWAYS|NEVER|RANDOM]`, inverse order of displayed element (set it to `CSSCaptcha::NEVER` to disable it)
-* `CSSCaptcha::ATTR_UNICODE_VERSION` <sup>1</sup> <sup>2</sup> (default: `CSSCaptcha::UNICODE_6_0_0`): integer, set maximum version of Unicode from which to pick up code points (redefine it with one the constants `CSSCaptcha::UNICODE_X_X_X` or `CSSCaptcha::UNICODE_FIRST`/`CSSCaptcha::UNICODE_LAST`)
+* `CSSCaptcha::ATTR_UNICODE_VERSION` <sup>1</sup> <sup>2</sup> (default: `CSSCaptcha::UNICODE_6_0_0`): integer, set maximum version of Unicode from which to pick up code points (redefine it with one the constants `CSSCaptcha::UNICODE_X_X_X` or `CSSCaptcha::UNICODE_FIRST`/`CSSCaptcha::UNICODE_LAST`). `CSSCaptcha::ASCII` can be used here to not use Unicode.
 * `CSSCaptcha::ATTR_ALPHABET` <sup>1</sup> <sup>2</sup> (default: `"23456789abcdefghjkmnpqrstuvwxyz"`): string, subset of ASCII alphanumeric characters from which to pick characters to generate the challenge (eg: define it to `implode(range('0', '9'))` to only use digits)
 * `CSSCaptcha::ATTR_FAKE_CHARACTERS_LENGTH` (default: `2`): integer, from `0` (disabled) to `16`, number of irrelevant characters added to the challenge when displayed
 * `CSSCaptcha::ATTR_NOISE_LENGTH` (default: `2`): integer (`0` for none), define the maximum number of noisy characters to add before and after each character composing the challenge. A random number of whitespaces (may be punctuations in the future) will be picked between 0 and this maximum
