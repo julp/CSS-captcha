@@ -9,6 +9,8 @@
 #include "php.h"
 #include "php_ini.h"
 #include "php_captcha.h"
+#include "zend_exceptions.h"
+#include "ext/standard/info.h"
 #include "ext/standard/php_rand.h"
 // #if HAVE_PHP_SESSION && !defined(COMPILE_DL_SESSION)
 # include "ext/session/php_session.h"
@@ -486,7 +488,7 @@ static int check_unicode_version_attribute(zval *value TSRMLS_DC)
     int valid;
 
     // we can assume that value is a "long" due to anterior convert_to_long
-    valid = Z_LVAL_P(value) >= UNICODE_FIRST && Z_LVAL_P(value) <= UNICODE_LAST;
+    valid = Z_LVAL_P(value) >= ASCII && Z_LVAL_P(value) <= UNICODE_LAST;
     if (!valid) {
         php_error_docref(NULL TSRMLS_CC, E_WARNING, "Invalid unicode version defined: %ld", Z_LVAL_P(value));
     }
@@ -610,7 +612,7 @@ static long captcha_set_attribute(Captcha_object* co, ulong attribute, zval **va
 #undef STRING_CAPTCHA_ATTRIBUTE
         {
             convert_to_long(&tmp);
-            if (ok = (NULL == attributes[attribute].cb || attributes[attribute].cb(&tmp TSRMLS_CC))) {
+            if ((ok = (NULL == attributes[attribute].cb || attributes[attribute].cb(&tmp TSRMLS_CC)))) {
                 *((long *) (((char *) co) + attributes[attribute].offset)) = Z_LVAL(tmp);
             }
             break;
@@ -625,7 +627,7 @@ static long captcha_set_attribute(Captcha_object* co, ulong attribute, zval **va
 #undef STRING_CAPTCHA_ATTRIBUTE
         {
             convert_to_string(&tmp);
-            if (ok = (NULL == attributes[attribute].cb || attributes[attribute].cb(&tmp TSRMLS_CC))) {
+            if ((ok = (NULL == attributes[attribute].cb || attributes[attribute].cb(&tmp TSRMLS_CC)))) {
                 efree(*((char **) (((char *) co) + attributes[attribute].offset)));
                 *((char **) (((char *) co) + attributes[attribute].offset)) = estrndup(Z_STRVAL(tmp), Z_STRLEN(tmp));
                 *((zend_strlen_t *) (((char *) co) + attributes[attribute].offset + sizeof(char *))) = Z_STRLEN(tmp);
@@ -909,11 +911,7 @@ static void generate_char(smart_str *ret, Captcha_object *co, long index, char c
             long l;
 
             for (l = 0; l < noise; l++) {
-                if (CAPTCHA_ATTR(skip_unicode_for_challenge)) {
-                    e = table[captcha_rand_range(offsets[TABLE_SPACES][0], offsets[TABLE_SPACES][1] - 1 TSRMLS_CC)];
-                } else {
-                    e = table[captcha_rand_range(offsets[TABLE_SPACES][1], offsets[TABLE_SPACES][CAPTCHA_ATTR(unicode_version) + 1] - 1 TSRMLS_CC)];
-                }
+                e = table[captcha_rand_range(offsets[TABLE_SPACES][ASCII != CAPTCHA_ATTR(unicode_version)], offsets[TABLE_SPACES][CAPTCHA_ATTR(unicode_version) + 1] - 1 TSRMLS_CC)];
                 smart_str_appendc(ret, '\\');
                 smart_str_append_hexa(ret, e);
             }
@@ -922,11 +920,7 @@ static void generate_char(smart_str *ret, Captcha_object *co, long index, char c
     /* </TODO:DRY> */
     smart_str_appendc(ret, '\\');
     p = char2int(c);
-    if (CAPTCHA_ATTR(skip_unicode_for_challenge)) {
-        e = table[captcha_rand_range(offsets[p][0], offsets[p][1] - 1 TSRMLS_CC)];
-    } else {
-        e = table[captcha_rand_range(offsets[p][1], offsets[p][CAPTCHA_ATTR(unicode_version) + 1] - 1 TSRMLS_CC)];
-    }
+    e = table[captcha_rand_range(offsets[p][ASCII != CAPTCHA_ATTR(unicode_version)], offsets[p][CAPTCHA_ATTR(unicode_version) + 1] - 1 TSRMLS_CC)];
     smart_str_append_hexa(ret, e);
     /* <TODO:DRY> */
     if (CAPTCHA_ATTR(noise_length)) {
@@ -935,11 +929,7 @@ static void generate_char(smart_str *ret, Captcha_object *co, long index, char c
             long l;
 
             for (l = 0; l < noise; l++) {
-                if (CAPTCHA_ATTR(skip_unicode_for_challenge)) {
-                    e = table[captcha_rand_range(offsets[TABLE_SPACES][0], offsets[TABLE_SPACES][1] - 1 TSRMLS_CC)];
-                } else {
-                    e = table[captcha_rand_range(offsets[TABLE_SPACES][1], offsets[TABLE_SPACES][CAPTCHA_ATTR(unicode_version) + 1] - 1 TSRMLS_CC)];
-                }
+                e = table[captcha_rand_range(offsets[TABLE_SPACES][ASCII != CAPTCHA_ATTR(unicode_version)], offsets[TABLE_SPACES][CAPTCHA_ATTR(unicode_version) + 1] - 1 TSRMLS_CC)];
                 smart_str_appendc(ret, '\\');
                 smart_str_append_hexa(ret, e);
             }
@@ -1494,13 +1484,14 @@ static PHP_MINIT_FUNCTION(captcha)
     zend_declare_class_constant_long(Captcha_ce_ptr, "RENDER_CSS",  STR_LEN("RENDER_CSS"),  CAPTCHA_RENDER_CSS TSRMLS_CC);
     zend_declare_class_constant_long(Captcha_ce_ptr, "RENDER_HTML", STR_LEN("RENDER_HTML"), CAPTCHA_RENDER_HTML TSRMLS_CC);
 
+    zend_declare_class_constant_long(Captcha_ce_ptr, "ASCII",  STR_LEN("ASCII"),  ASCII TSRMLS_CC);
 #define UNICODE_FIRST(M, m, p) \
     zend_declare_class_constant_long(Captcha_ce_ptr, "UNICODE_FIRST",  STR_LEN("UNICODE_FIRST"), UNICODE_FIRST TSRMLS_CC);
 #define UNICODE_LAST(M, m, p) \
     zend_declare_class_constant_long(Captcha_ce_ptr, "UNICODE_LAST",  STR_LEN("UNICODE_LAST"), UNICODE_LAST TSRMLS_CC);
 #define UNICODE_VERSION(M, m, p) \
     zend_declare_class_constant_long(Captcha_ce_ptr, "UNICODE_" #M "_" #m "_" #p,  STR_LEN("UNICODE_" #M "_" #m "_" #p), UNICODE_##M##_##m##_##p TSRMLS_CC);
-#include "../gen/suported_unicode_versions.h"
+#include "../gen/supported_unicode_versions.h"
 #undef UNICODE_FIRST
 #undef UNICODE_LAST
 #undef UNICODE_VERSION
@@ -1555,7 +1546,7 @@ static PHP_MINFO_FUNCTION(captcha)
 #define UNICODE_LAST(M, m, p) \
     php_info_print_table_row(2, "Maximum supported unicode version", #M "." #m "." #p);
 #define UNICODE_VERSION(M, m, p) /* NOP */
-#include "../gen/suported_unicode_versions.h"
+#include "../gen/supported_unicode_versions.h"
 #undef UNICODE_FIRST
 #undef UNICODE_LAST
 #undef UNICODE_VERSION
