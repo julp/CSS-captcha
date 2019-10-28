@@ -197,14 +197,16 @@ void generate_tables_for_elixir(FILE *fp, DArray *da, size_t offsets[][_UNICODE_
 {
     int i, v;
 
-    generic_generate_table(fp, da, "  @table <<", ">>", "::32");
+    generic_generate_table(fp, da, "  @table <<", "  >>\n", "::32");
     for (i = 0; i < _TABLE_COUNT; i++) {
         for (v = 0; v < _UNICODE_VERSIONS_COUNT; v++) {
+            size_t e;
+
             fputs("  defp offset(", fp);
             if (i > TABLE_z) {
               switch (i) {
                     case TABLE_SPACES:
-                        fputs(":spaces", fp); // ?\s
+                        fputs("?\\s", fp);
                         break;
                     case TABLE_COMBINABLES:
                         fputs(":combinables", fp);
@@ -222,7 +224,8 @@ void generate_tables_for_elixir(FILE *fp, DArray *da, size_t offsets[][_UNICODE_
             } else {
                 fprintf(fp, ":unicode_%u_%u_%u", unicode_versions[v][0], unicode_versions[v][1], unicode_versions[v][2]);
             }
-            fprintf(fp, "), do: {%zu, %zu}\n", offsets[i][0], offsets[i][v + 1 /* for start offsets */] - 1/* Elixir's range is [s;e] (not [s;e[) so soustract 1 */);
+            e = offsets[i][v + 1 /* for start offsets */];
+            fprintf(fp, "), do: {%zu, %zu}\n", offsets[i][0], offsets[i][0] == e ? e : e - 1/* Elixir's range is [s;e] (not [s;e[) so soustract 1 */);
         }
     }
 }
@@ -498,7 +501,7 @@ int main(int argc, char **argv)
             goto end;
         }
         if (cp.value < 0x80) {
-            // special case: ASCII characters are mappend on dummy Unicode 0.0.0
+            // special case: ASCII characters are mapped on dummy Unicode 0.0.0
             memset(cp.version, 0, sizeof(cp.version));
         } else {
             u_charAge(cp.value, cp.version);
@@ -536,7 +539,11 @@ int main(int argc, char **argv)
 
         for (j = 0, s = uset_size(uset[i]); j < s; j++) {
             cp.value = uset_charAt(uset[i], j);
-            u_charAge(cp.value, cp.version);
+            if (cp.value < 0x80) {
+                memcpy(cp.version, unicode_versions[0], sizeof(cp.version));
+            } else {
+                u_charAge(cp.value, cp.version);
+            }
             if (vflag) {
                 if (memcmp(cp.version, wanted_version, sizeof(wanted_version)) > 0) {
                     continue;
